@@ -1,12 +1,17 @@
+import gc
+
+
+
+gc.collect()
+
 import  pycuda
-from pycuda import driver , compiler , gpuarray , tools
 import pandas as pd
+
+from pycuda import driver , compiler , gpuarray , tools
 import numpy as np
-
-
-
-
 import pycuda.autoinit
+
+
 
 # this x ,  y is used for test function
 # x = np.array(
@@ -32,92 +37,123 @@ import pycuda.autoinit
 
 
 # this x , y is used for test grid used
-row = 100
-col = 100
-x = np.random.random((row,5)).astype(np.float32)
-y = np.random.random((col,5)).astype(np.float32)
-z = np.empty((row,col))
-x_gpu = gpuarray.to_gpu(x)
 
-y_gpu = gpuarray.to_gpu(y)
+# it is better to let col*attr < = 1e7
+row_batch    = 10
+batch_size   = 1
+row          = row_batch*batch_size
+col          = 6
+attr         = 2
+bandwith     = 4
+block        = (row,1,1)
+grid         = (col,batch_size,1)
 
-z_gpu = gpuarray.empty((2,4),np.float32)
+
+#test for power and limit
+
+# you must change the type to float32
+x            = np.random.random((row,attr)).astype(np.float32)
+y            = np.random.random((col,attr)).astype(np.float32)
+r            = np.random.random((1,col)).astype(np.float32)
+s            = np.random.random((row,col)).astype(np.float32)
 
 
 
-kernel_node_template = u"""
+# test for algorithmn
+# x             = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
+# y             = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
+# z             = np.empty((row,col))
+# s             = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
+#
+
+
+
+x_gpu        = gpuarray.to_gpu(x)
+y_gpu        = gpuarray.to_gpu(y)
+s_gpu        = gpuarray.to_gpu(s)
+z_gpu        = gpuarray.empty((row,col),np.float32)
+zs_gpu       = gpuarray.empty((row,col),np.float32)
+
+
+matrixCal_template = u"""
     #include <math.h>
+
 
     __global__ void matrixMulKernel(float *x , float *y  , float *z ){
       
-
-    int tx  = threadIdx.x;
-    int ty  = threadIdx.y;
-    int tz  = 5;
+          int tx          =  threadIdx.x;
+          int bix         =  blockIdx.x ; 
+    const int NUMOFATTR   =  %(NUMOFATTR)s;
+    const int COLOFOUT    =  gridDim.x ; //%(COLOFOUT)s;
+    const int BATCHNUM    =  blockDim.y;
+    const int ROWNUM      =  tx*BATCHNUM;
+    //const int ROWOFOUT  =  blockDim.x ;   // %(ROWOFOUT)s;
+          
     float s = 0;
-    for (int idx  = 0 ; idx< tz ; idx++){
-         s += pow(x[tx*5+idx]-y[ty*5+idx],2);
+    for (int idx  = 0 ; idx< NUMOFATTR ; idx++){
+         s += pow(x[ROWNUM*NUMOFATTR+idx]-y[bix*NUMOFATTR+idx],2);
+          //s += pow(x[1]-y[1],2) ; 
     }
     
-    z[tx*4+ty] = sqrt(s) ; 
-    
-    
-    int bix = blockIdx.x ; 
-    int bdx = blockDim.x ;
-    z[0] =  bix ;
-    z[1] =  bdx ; 
+    z[ROWNUM*COLOFOUT+bix] =sqrt(s); 
     
 }
 
+
+
+    __global__ void kernelCalculate(float *z){
+          float bandwith      = %(bandwith)s ; 
+          int   tx            =  threadIdx.x;
+          int   bix           =  blockIdx.x ; 
+    //const int   NUMOFATTR     =  %(NUMOFATTR)s;
+    const int   COLOFOUT      =  gridDim.x ; //%(COLOFOUT)s;
+    const int   BATCHNUM      =  blockDim.y;
+    const int   ROWNUM        =  tx*BATCHNUM;
+    //const int ROWOFOUT      =  blockDim.x ;   // %(ROWOFOUT)s;
+    z[ROWNUM*COLOFOUT+bix]    =  z[ROWNUM*COLOFOUT+bix] / bandwith;    
+    }
+    
+      __global__ void zsCal(float *z ,  float *s  , float *zs){
+    
+          
+          int   tx            =  threadIdx.x;
+          int   bix           =  blockIdx.x ; 
+    //const int   NUMOFATTR   =  %(NUMOFATTR)s;
+    const int   COLOFOUT      =  gridDim.x ; //%(COLOFOUT)s;
+    const int   BATCHNUM      =  blockDim.y;
+    const int   ROWNUM        =  tx*BATCHNUM;
+    //const int ROWOFOUT      =  blockDim.x ;   // %(ROWOFOUT)s;
+    zs[ROWNUM*COLOFOUT+bix]   = s[ROWNUM*COLOFOUT+bix] * z[ROWNUM*COLOFOUT+bix] ; 
+    
+    
+    }
+  
 """
-mod = compiler.SourceModule(kernel_node_template)
-
-matrixMul = mod.get_function("matrixMulKernel")
-
-
-matrixMul(x_gpu,y_gpu,z_gpu,block = (row,col,1), grid = (1,1))
 
 
 
 
+matrixCal = matrixCal_template%{
+
+    'NUMOFATTR':attr,
+    'COLOFOUT':col,
+    'ROWOFOUT':row,
+    'bandwith' : bandwith
+}
 
 
+mod               = compiler.SourceModule(matrixCal)
+
+matrixMul         = mod.get_function("matrixMulKernel")
+kernelCalculate   = mod.get_function("kernelCalculate")
+zsCal                = mod.get_function("zsCal")
 
 
-#
-# import pycuda.autoinit
-# import pycuda.driver as drv
-# import numpy
-#
-# from pycuda.compiler import SourceModule
-#
-# mod = SourceModule("""
-# __global__ void multiply_them(float *dest, float *a, float *b)
-# {
-#   const int i = threadIdx.x;
-#   dest[i] =   blockIdx.x;
-#
-# }
-# """)
-#
-# multiply_them = mod.get_function("multiply_them")
-#
-# a = numpy.random.randn(400).astype(numpy.float32)
-# b = numpy.random.randn(400).astype(numpy.float32)
-#
-# dest = numpy.zeros_like(a)
-# multiply_them(
-#     drv.Out(dest), drv.In(a), drv.In(b),
-#     block=(100, 2, 1), grid=(2, 2))
-#
-# print(dest)
+matrixMul(driver.In(x),driver.In(y),z_gpu,block = block,grid = grid )
 
+print(z_gpu.get())
 
-#
-# __global__ void add( int *a, int *b, int *c ) {
-#     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-#     while (tid < N) {
-#         c[tid] = a[tid] + b[tid];
-#         tid += blockDim.x * gridDim.x;
-#     }
-# }
+kernelCalculate(z_gpu, block = block,grid = grid )
+
+zsCal(z_gpu,s_gpu,zs_gpu, block = block,grid = grid)
+
