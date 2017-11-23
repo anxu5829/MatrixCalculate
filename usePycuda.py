@@ -36,45 +36,6 @@ import pycuda.autoinit
 # z = np.empty((2,4))
 
 
-# this x , y is used for test grid used
-
-# it is better to let col*attr < = 1e7
-row_batch    = 10
-batch_size   = 1
-row          = row_batch*batch_size
-col          = 6
-attr         = 2
-bandwith     = 4
-block        = (row,1,1)
-grid         = (col,batch_size,1)
-
-
-#test for power and limit
-
-# you must change the type to float32
-x            = np.random.random((row,attr)).astype(np.float32)
-y            = np.random.random((col,attr)).astype(np.float32)
-r            = np.random.random((1,col)).astype(np.float32)
-s            = np.random.random((row,col)).astype(np.float32)
-
-
-
-# test for algorithmn
-# x             = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
-# y             = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
-# z             = np.empty((row,col))
-# s             = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
-#
-
-
-
-x_gpu        = gpuarray.to_gpu(x)
-y_gpu        = gpuarray.to_gpu(y)
-s_gpu        = gpuarray.to_gpu(s)
-z_gpu        = gpuarray.empty((row,col),np.float32)
-zs_gpu       = gpuarray.empty((row,col),np.float32)
-
-
 matrixCal_template = u"""
     #include <math.h>
 
@@ -142,11 +103,59 @@ matrixCal = matrixCal_template%{
 }
 
 
-mod               = compiler.SourceModule(matrixCal)
 
+# get function
+
+
+mod               = compiler.SourceModule(matrixCal)
 matrixMul         = mod.get_function("matrixMulKernel")
 kernelCalculate   = mod.get_function("kernelCalculate")
 zsCal                = mod.get_function("zsCal")
+
+
+
+
+# model paras
+
+# this x , y is used for test grid used
+
+# it is better to let col*attr < = 1e7
+row_batch    = 1024
+batch_size   = 1
+row          = row_batch*batch_size
+col          = 100000
+attr         = 200
+bandwith     = 4
+block        = (row,1,1)
+grid         = (col,batch_size,1)
+
+
+#test for power and limit
+
+# you must change the type to float32
+x            = np.random.random((row,attr)).astype(np.float32)
+y            = np.random.random((col,attr)).astype(np.float32)
+r            = np.random.random((col,1)).astype(np.float32)
+s            = np.random.random((row,col)).astype(np.float32)
+
+
+
+# test for algorithmn
+# x             = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
+# y             = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
+# z             = np.empty((row,col))
+# s             = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
+# r             = np.arange(col).reshape((col,1)).astype(np.float32)
+
+
+
+x_gpu        = gpuarray.to_gpu(x)
+y_gpu        = gpuarray.to_gpu(y)
+s_gpu        = gpuarray.to_gpu(s)
+z_gpu        = gpuarray.empty((row,col),np.float32)
+zs_gpu       = gpuarray.empty((row,col),np.float32)
+
+
 
 
 matrixMul(driver.In(x),driver.In(y),z_gpu,block = block,grid = grid )
@@ -157,3 +166,13 @@ kernelCalculate(z_gpu, block = block,grid = grid )
 
 zsCal(z_gpu,s_gpu,zs_gpu, block = block,grid = grid)
 
+zs = zs_gpu.get()
+
+wr = zs.dot(r)
+sum_zs = zs.dot(np.ones((col,1)).astype(np.float32))
+
+print(wr.shape)
+print(sum_zs.shape)
+
+print(wr[:100,:100])
+print(sum_zs[:100,:100])
