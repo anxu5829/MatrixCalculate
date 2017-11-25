@@ -37,11 +37,11 @@ import pycuda.autoinit
 
 
 # it is better to let col*attr < = 1e7
-row_batch    = 1024
+row_batch    = 6
 batch_size   = 1
 row          = row_batch*batch_size
-col          = 1000000
-attr         = 1
+col          = 31
+attr         = 2
 bandwith     = 4
 block        = (row,1,1)
 grid         = (col,batch_size,1)
@@ -135,19 +135,19 @@ zsCal             = mod.get_function("zsCal")
 #test for power and limit
 
 # you must change the type to float32
-x            = np.random.random((row,attr)).astype(np.float32)
-y            = np.random.random((col,attr)).astype(np.float32)
-r            = np.random.random((col,1)).astype(np.float32)
-s            = np.random.random((row,col)).astype(np.float32)
-
+# x            = np.random.random((row,attr)).astype(np.float32)
+# y            = np.random.random((col,attr)).astype(np.float32)
+# r            = np.random.random((col,1)).astype(np.float32)
+# s            = np.random.random((row,col)).astype(np.float32)
+#
 
 
 # test for algorithmn
-# x             = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
-# y             = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
-# z             = np.empty((row,col))
-# s             = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
-# r             = np.arange(col).reshape((col,1)).astype(np.float32)
+x             = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
+y             = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
+z             = np.empty((row,col))
+s             = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
+r             = np.arange(col).reshape((col,1)).astype(np.float32)
 
 #def main(x,y,r,s,row,col,block,grid):
 
