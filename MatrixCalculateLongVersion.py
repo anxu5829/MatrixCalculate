@@ -14,15 +14,15 @@ import pycuda.autoinit
 # it is better to let col_batch*attr < = 1e7
 
 # 可以人为设定的是row_batch , col
-row = 100
-batch_size = 1
+row = 10000
+batch_size = 100
 row_batch =int( row / batch_size )
-col = 1800000
-col_batch_num = 100
+col = 100000
+col_batch_num = 10
 col_batch =  int(col / col_batch_num) + 1
 attr = 2
 bandwith = 4
-block = (row, 1, 1)
+block = (row_batch, 1, 1)
 grid = (col_batch, batch_size, 1)
 
 
@@ -45,17 +45,17 @@ grid = (col_batch, batch_size, 1)
 ##### test for algorithmn
 x        = np.arange(row*attr).reshape((row,attr)).astype(np.float32)
 y        = np.arange(10,col*attr+10).reshape((col,attr)).astype(np.float32)
-z        = np.empty((row,col)).astype(np.float32)
-s        = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
-r        = np.arange(col).reshape((col,1)).astype(np.float32)
+#z        = np.empty((row,col)).astype(np.float32)
+#s        = np.arange(5,row*col+5).reshape((row,col)).astype(np.float32)
+#r        = np.arange(col).reshape((col,1)).astype(np.float32)
 
 # def main(x,y,r,s,row,col_batch,block,grid):
 
 x_gpu = gpuarray.to_gpu(x)
 y_gpu = gpuarray.to_gpu(y)
-s_gpu = gpuarray.to_gpu(s)
+#s_gpu = gpuarray.to_gpu(s)
 z_gpu = gpuarray.empty((row, col), np.float32)
-zs_gpu = gpuarray.empty((row, col), np.float32)
+#zs_gpu = gpuarray.empty((row, col), np.float32)
 
 
 

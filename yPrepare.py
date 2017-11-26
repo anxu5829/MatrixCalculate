@@ -1,7 +1,10 @@
 # prepare User distance square
 import numpy as np
+import  sklearn.metrics.pairwise as smp
 
-def calculateDis(ObjectAttr,attrNum,ObjectNum):
+
+
+def calculateDis(ObjectAttr,attrNum=2,ObjectNum = 1e4):
     """
 
     :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
@@ -15,7 +18,12 @@ def calculateDis(ObjectAttr,attrNum,ObjectNum):
 
     """
     #　return a test matrix for other
-    return np.ones((ObjectNum,ObjectNum))
+
+    testx = np.arange(ObjectNum*attrNum).reshape((int(ObjectNum),attrNum))
+    # 这里使用了itertools 往生成的矩阵添加东西
+    # 思路是使用多进程完成任务
+    dis = smp.pairwise_distances(testx)
+    return dis**2
 
 
 
