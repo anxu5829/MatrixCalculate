@@ -10,7 +10,7 @@ import  gc
 from itertools import chain
 import dask.array as da
 import collections
-import re
+
 
 
 def calculateDis(ObjectAttr,attrNum=2,ObjectNum = 1e4):
@@ -168,8 +168,8 @@ def changeNameToID(tableName,id , plan = 'A'):
 def splitDF(tableName,id,colListContinue,colListDiscrete):
     colListContinue.append(id)
     colListDiscrete.append(id)
-    itemCntnueAttr  = tableName[colListContinue]
-    itemDscrtAttr   = tableName[colListDiscrete]
+    itemCntnueAttr  = tableName[colListContinue].copy()
+    itemDscrtAttr   = tableName[colListDiscrete].copy()
     return (itemCntnueAttr,itemDscrtAttr)
 
 
@@ -260,7 +260,7 @@ def findNetwork(tableName,fillnawith,split = r"&|\|" ):
     del id_colNameDF
     gc.collect()
 
-    return(ObjectTagmatrix)
+    return(ObjectTagmatrix,objectHasNoTag)
 
 
 ##########################################################
@@ -270,7 +270,7 @@ if __name__=="__main__":
 
 
     # change dir
-    os.chdir("/home/xuan/桌面/recommand Sys/")
+    os.chdir("C:\\Users\\22560\\Desktop\\recommand Sys\\recommand Sys")
 
     # load item data
     item = pd.read_csv("songsCSV.csv",encoding="UTF-8" ,dtype = {
@@ -282,11 +282,13 @@ if __name__=="__main__":
     item.loc[2296320,'song_id'] = 'special'
 
     # fill na use default value , this value is also used in build social network
+    # be caution ! you just need to fill those cols will be used in
+    # building the network!
     fillnawith = collections.OrderedDict()
     fillnawith['genre_ids'] = '-1'
-    fillnawith['artist_name'] = 'no_artist'
-    fillnawith['composer']= 'no_composer'
     fillnawith['language'] = '-1'
+
+
 
     item = fillNAN(item, fillnawith)
 
@@ -295,18 +297,22 @@ if __name__=="__main__":
 
 
     # change primary key to ID
-    item , song_id = changeNameToID(item, 'song_id' , plan = "B")
+    item , song_id = changeNameToID(item, 'song_id' , plan = "A")
 
 
     # split the dataframe to two , one of it is containing  the continue attr
     # the other containing the discrete attr
 
+    # 注意：分类不能分的太细，分之前可以对于属性做做聚类，把歌手这种东西先聚聚类，否则分类太多
+    #　一是超大矩阵运算不好做，二来分的太细做社交网络就没意义了
+
+
     ( itemCntnueAttr , itemDscrtAttr ) = \
         splitDF(item,"song_id",
                 ["song_length"],
-                ["genre_ids","artist_name","composer","language"]
+                ["genre_ids","language"]
                 )
-    del item ; gc.collect;
+    del item ; gc.collect();
 
 
 
@@ -320,10 +326,37 @@ if __name__=="__main__":
 
     itemWithTag = tagCombine(itemDscrtAttr, id='song_id', tagColList=colList)
 
-    itemTagmatrix = findNetwork(itemWithTag,  fillnawith , split = r"&|\|")
+    (itemTagmatrix,itemNoAttr) = findNetwork(itemWithTag,  fillnawith , split = r"&|\|")
+
+    itemAttrNum = itemTagmatrix.sum(1)
+    itemAttrNum_da = da.from_array(itemAttrNum, chunks=(1000, 1000))
 
 
-    itemNet = calculateNet(1, 1, 22 * 1e4)
+    # calculate the dot
+    tagNum = itemTagmatrix.shape[1]
+    itemNum = itemTagmatrix.shape[0]
+    item_item_matrix = csc_matrix((itemNum,itemNum))
+    item_item_matrix = da.from_array(item_item_matrix,chunks=(1000, 1000))
+    dotBatch = np.arange(0,tagNum,100)
+    for i in range(len(dotBatch)):
+        if i !=( len(dotBatch)-1) :
+            itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:dotBatch[i+1]],chunks=(1000,1000))
+        else :
+            itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:], chunks=(1000, 1000))
+        item_item_matrix += itemTagmatrix_da.dot(itemTagmatrix_da.transpose())
+
+
+
+    gc.collect()
+
+    item_item_matrix = item_item_matrix/itemAttrNum_da
+    item_item_matrix = item_item_matrix.transpose()/itemAttrNum_da
+    item_item_matrix = item_item_matrix.transpose()
+
+    da.to_hdf5('D:\\item.hdf5', '/item_itemNet/data',item_item_matrix )
+
+
+
 
     # usrNet = calculateNet(1,1,1*1e4)
 
