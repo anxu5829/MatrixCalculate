@@ -10,49 +10,8 @@ import  gc
 from itertools import chain
 import dask.array as da
 import collections
-
-
-
-def calculateDis(ObjectAttr,attrNum=2,ObjectNum = 1e4):
-    """
-
-    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
-    :param attrNum: the  number of continuous attr a usr have
-    :param ObjectNum: the number of usr we observed
-    :return:
-
-    ObjectAttr matrix is ObjectNum * attrNum matrix
-    target is to return a Object *　Object matrix  ， saving value of
-    square  of distance  of each Object
-
-    """
-    #　return a test matrix for other
-
-    testx = np.arange(ObjectNum*attrNum).reshape((int(ObjectNum),attrNum))
-    # 这里使用了itertools 往生成的矩阵添加东西
-    # 思路是使用多进程完成任务
-    dis = smp.pairwise_distances(testx)
-    return dis**2
-
-
-
-def calculateNet(ObjectAttr,attrNum,ObjectNum):
-    """
-    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
-    :param attrNum: the  number of categorical attr a usr have
-    :param ObjectNum: the number of usr we observed
-    :return:
-
-    ObjectAttr matrix is ObjectNum * attrNum matrix
-    target is to return a Object *　Object matrix  ， saving value of
-    the social net work of each Object
-    """
-    #　return a test matrix for other
-
-
-    return np.ones((ObjectNum,ObjectNum))
-
-
+import sys
+from usefulTool import LargeSparseMatrixCosine
 
 def subtractIdx(ObservationData , totalLen  ,encoded = True):
     """
@@ -187,9 +146,6 @@ def tagCombine(tableName, tagColList, id, split="|"):
 
 
 
-
-
-
 def findNetwork(tableName,fillnawith,split = r"&|\|" ):
 
     #tableName = songtag;split = "|" ,
@@ -263,7 +219,80 @@ def findNetwork(tableName,fillnawith,split = r"&|\|" ):
     return(ObjectTagmatrix,objectHasNoTag)
 
 
-##########################################################
+########################cal culate net #######################
+
+
+
+def calculateDis(ObjectAttr, attrNum=2, ObjectNum=1e4):
+    """
+
+    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
+    :param attrNum: the  number of continuous attr a usr have
+    :param ObjectNum: the number of usr we observed
+    :return:
+
+    ObjectAttr matrix is ObjectNum * attrNum matrix
+    target is to return a Object *　Object matrix  ， saving value of
+    square  of distance  of each Object
+
+    """
+    # 　return a test matrix for other
+
+    testx = np.arange(ObjectNum * attrNum).reshape((int(ObjectNum), attrNum))
+    # 这里使用了itertools 往生成的矩阵添加东西
+    # 思路是使用多进程完成任务
+    dis = smp.pairwise_distances(testx)
+    return dis ** 2
+
+
+def calculateNet(ObjectAttr):
+    """
+    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
+    :param attrNum: the  number of categorical attr a usr have
+    :param ObjectNum: the number of usr we observed
+    :return:
+
+    ObjectAttr matrix is ObjectNum * attrNum matrix
+    target is to return a Object *　Object matrix  ， saving value of
+    the social net work of each Object
+    """
+    # 　return a test matrix for other
+    attrNum = ObjectAttr.shape[1]
+    ObjectNum = ObjectAttr.shape[0]
+
+
+
+    #
+    # itemAttrNum_da = da.from_array(itemAttrNum, chunks=(1000, 1000))
+    #
+    # # calculate the dot
+    # tagNum = itemTagmatrix.shape[1]
+    # itemNum = itemTagmatrix.shape[0]
+    # item_item_matrix = csc_matrix((itemNum, itemNum))
+    # item_item_matrix = da.from_array(item_item_matrix, chunks=(1000, 1000))
+    # dotBatch = np.arange(0, tagNum, 100)
+    # for i in range(len(dotBatch)):
+    #     if i != (len(dotBatch) - 1):
+    #         itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:dotBatch[i + 1]], chunks=(1000, 1000))
+    #     else:
+    #         itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:], chunks=(1000, 1000))
+    #     item_item_matrix += itemTagmatrix_da.dot(itemTagmatrix_da.transpose())
+    #
+    # gc.collect()
+    #
+    # item_item_matrix = item_item_matrix / itemAttrNum_da
+    # item_item_matrix = item_item_matrix.transpose() / itemAttrNum_da
+    # item_item_matrix = item_item_matrix.transpose()
+    #
+    # da.to_hdf5('D:\\item.hdf5', '/item_itemNet/data', item_item_matrix)
+
+    pass
+
+
+###############################data prepare ################
+
+
+
 
 
 if __name__=="__main__":
@@ -287,7 +316,7 @@ if __name__=="__main__":
     fillnawith = collections.OrderedDict()
     fillnawith['genre_ids'] = '-1'
     fillnawith['language'] = '-1'
-
+    fillnawith['artist_name'] = "no_artist"
 
 
     item = fillNAN(item, fillnawith)
@@ -310,7 +339,7 @@ if __name__=="__main__":
     ( itemCntnueAttr , itemDscrtAttr ) = \
         splitDF(item,"song_id",
                 ["song_length"],
-                ["genre_ids","language"]
+                ["genre_ids","language","artist_name"]
                 )
     del item ; gc.collect();
 
@@ -328,33 +357,7 @@ if __name__=="__main__":
 
     (itemTagmatrix,itemNoAttr) = findNetwork(itemWithTag,  fillnawith , split = r"&|\|")
 
-    itemAttrNum = itemTagmatrix.sum(1)
-    itemAttrNum_da = da.from_array(itemAttrNum, chunks=(1000, 1000))
-
-
-    # calculate the dot
-    tagNum = itemTagmatrix.shape[1]
-    itemNum = itemTagmatrix.shape[0]
-    item_item_matrix = csc_matrix((itemNum,itemNum))
-    item_item_matrix = da.from_array(item_item_matrix,chunks=(1000, 1000))
-    dotBatch = np.arange(0,tagNum,100)
-    for i in range(len(dotBatch)):
-        if i !=( len(dotBatch)-1) :
-            itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:dotBatch[i+1]],chunks=(1000,1000))
-        else :
-            itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:], chunks=(1000, 1000))
-        item_item_matrix += itemTagmatrix_da.dot(itemTagmatrix_da.transpose())
-
-
-
-    gc.collect()
-
-    item_item_matrix = item_item_matrix/itemAttrNum_da
-    item_item_matrix = item_item_matrix.transpose()/itemAttrNum_da
-    item_item_matrix = item_item_matrix.transpose()
-
-    da.to_hdf5('D:\\item.hdf5', '/item_itemNet/data',item_item_matrix )
-
+    LargeSparseMatrixCosine(itemTagmatrix,num=5000)
 
 
 
