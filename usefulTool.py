@@ -3,6 +3,7 @@ import pandas as pd
 from  scipy.sparse import csc_matrix
 from  scipy.sparse import diags
 import gc
+import h5sparse
 
 
 def sparseToPandas(sparseMatrix):
@@ -15,6 +16,7 @@ def sparseToPandas(sparseMatrix):
         sort_values(['row', 'col']).\
         reset_index(drop=True)
     return(data)
+
 
 def pandasToSparse(pandasMatrix):
     csc = csc_matrix((pandasMatrix.data,
@@ -52,7 +54,8 @@ def load_pickle(filename):
 
 
 
-def LargeSparseMatrixCosine(largeSparseMatrix,num = 3000):
+def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace = "D:\\tempdata\\"):
+
     # this method will save the result in disk
     (rowNum,colNum) = largeSparseMatrix.shape
     sep = np.linspace(0,rowNum,endpoint=True,dtype=np.int64,num=num)
@@ -63,6 +66,7 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 3000):
     lenOfVecAll = diags(1 / lenOfVec)
     for i,j in enumerate(sep):
         if i+1 < len(sep):
+        #if i < 40:
             #print(i,j)
             # get a block from the ogininal matrix
             block_of_sparse = largeSparseMatrix[j:sep[i+1],:]
@@ -71,18 +75,76 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 3000):
             dot_product_of_block = block_of_sparse.dot(
                                         largeSparseMatrix.transpose()
                                     )
-            lenOfBlockVec = diags(1/ lenOfVec[:sep[i+1]])
+            lenOfBlockVec = diags(1/ lenOfVec[j:sep[i+1]])
 
             dot_cosine = lenOfBlockVec @ dot_product_of_block @ lenOfVecAll
 
+            #　we just select few of the to build net work
+            dot_cosine = dot_cosine > select
 
-            filename = "dot_cosine_"+str(j)+"_"+str(sep[i+1])+".mtx"
-            save_sparse_csc(
-                        filename,dot_cosine
-                        )
+            gc.collect()
+
+            dot_cosine = sparseToPandas(dot_cosine)
+            dot_cosine.row = dot_cosine.row + j
+
+            dot_cosine.to_csv(
+                    fileplace + "dot_cosine"+str(i)+".gzip",sep = ',',
+                    index = False,
+                    encoding= "utf-8",
+                    compression = "gzip"
+                              )
 
             del dot_cosine,lenOfBlockVec
             gc.collect()
+            print("S_item is now  preparing")
+            print( str((i+1)/len(sep)) +"percent of data is prepared ")
 
 
+
+
+
+
+
+def largeMatrixDis(ObjectDis,id ):
+    # id = "song_id"
+    pass
+
+
+
+
+
+
+
+def mergeDataToSparse(workfilename,numOfFile):
+    # workfilename = "D:\\tempdata\\"
+    list = []
+    for i in range(numOfFile):
+        file = pd.read_csv(workfilename+"dot_cosine"+str(i) +".gzip" ,compression= "gzip")
+        list.append(file)
+        del file
+
+    dot_cosine = pd.concat(list)
+    dot_cosine = pandasToSparse(dot_cosine)
+    return dot_cosine
+
+
+
+
+
+# api :https://pypi.python.org/pypi/h5sparse/0.0.4
+def saveToH5(sparseMatrix,filename):
+    with h5sparse.File(filename) as h5f:
+        h5f.create_dataset('sparse/matrix', data=sparseMatrix)
+
+
+
+def laodFromH5(filename,filedir):
+    h5f = h5sparse.File(filename)
+    return h5f[filedir]
+
+
+    # h5f['sparse/matrix'][1:3].toarray()
+    # h5f['sparse']['matrix'][1:3].toarray()
+    # h5f['sparse']['matrix'].value.toarray()
+    # this one is allow you to append data ， nice ！
 

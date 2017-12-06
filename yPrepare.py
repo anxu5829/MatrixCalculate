@@ -5,13 +5,15 @@ import  os
 from    scipy.sparse import csr_matrix
 from    scipy.sparse import csc_matrix
 from    sklearn.preprocessing import LabelEncoder
-import  sklearn.metrics.pairwise as smp
 import  gc
-from itertools import chain
 import dask.array as da
 import collections
 import sys
 from usefulTool import LargeSparseMatrixCosine
+from usefulTool import mergeDataToSparse
+from usefulTool import saveToH5
+
+
 
 def subtractIdx(ObservationData , totalLen  ,encoded = True):
     """
@@ -81,10 +83,15 @@ def yGenerator(ObjectNum,mode = "usr",parallel = True):
 ############# method for data prepare#####################
 
 # fill na
-def fillNAN(tableName,values):
+def fillDscrtNAN(tableName,values):
     # values = {'genre_ids' : 'unkown' }
     tableName = tableName.fillna(value = values)
     return  tableName
+
+def fillCntnueNAN(tableName,values):
+    # a list of continue col who will be fill with mean
+    # values = ['song_length']
+    tableName.loc[:, values] = tableName[values].fillna(tableName[values].mean())
 
 
 def changeNameToID(tableName,id , plan = 'A'):
@@ -142,6 +149,8 @@ def tagCombine(tableName, tagColList, id, split="|"):
     temp["concat"] = tableName[tag0].str.cat([ tableName[i] for i in tagColList if i != tag0],sep = split)
     temp = temp.set_index(tableName[id])
     return(temp)
+
+
 
 
 
@@ -219,75 +228,6 @@ def findNetwork(tableName,fillnawith,split = r"&|\|" ):
     return(ObjectTagmatrix,objectHasNoTag)
 
 
-########################cal culate net #######################
-
-
-
-def calculateDis(ObjectAttr, attrNum=2, ObjectNum=1e4):
-    """
-
-    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
-    :param attrNum: the  number of continuous attr a usr have
-    :param ObjectNum: the number of usr we observed
-    :return:
-
-    ObjectAttr matrix is ObjectNum * attrNum matrix
-    target is to return a Object *　Object matrix  ， saving value of
-    square  of distance  of each Object
-
-    """
-    # 　return a test matrix for other
-
-    testx = np.arange(ObjectNum * attrNum).reshape((int(ObjectNum), attrNum))
-    # 这里使用了itertools 往生成的矩阵添加东西
-    # 思路是使用多进程完成任务
-    dis = smp.pairwise_distances(testx)
-    return dis ** 2
-
-
-def calculateNet(ObjectAttr):
-    """
-    :param ObjectAttr: must be a matrix has a shape like (ObjectNum *　attrNum)
-    :param attrNum: the  number of categorical attr a usr have
-    :param ObjectNum: the number of usr we observed
-    :return:
-
-    ObjectAttr matrix is ObjectNum * attrNum matrix
-    target is to return a Object *　Object matrix  ， saving value of
-    the social net work of each Object
-    """
-    # 　return a test matrix for other
-    attrNum = ObjectAttr.shape[1]
-    ObjectNum = ObjectAttr.shape[0]
-
-
-
-    #
-    # itemAttrNum_da = da.from_array(itemAttrNum, chunks=(1000, 1000))
-    #
-    # # calculate the dot
-    # tagNum = itemTagmatrix.shape[1]
-    # itemNum = itemTagmatrix.shape[0]
-    # item_item_matrix = csc_matrix((itemNum, itemNum))
-    # item_item_matrix = da.from_array(item_item_matrix, chunks=(1000, 1000))
-    # dotBatch = np.arange(0, tagNum, 100)
-    # for i in range(len(dotBatch)):
-    #     if i != (len(dotBatch) - 1):
-    #         itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:dotBatch[i + 1]], chunks=(1000, 1000))
-    #     else:
-    #         itemTagmatrix_da = da.from_array(itemTagmatrix[:, dotBatch[i]:], chunks=(1000, 1000))
-    #     item_item_matrix += itemTagmatrix_da.dot(itemTagmatrix_da.transpose())
-    #
-    # gc.collect()
-    #
-    # item_item_matrix = item_item_matrix / itemAttrNum_da
-    # item_item_matrix = item_item_matrix.transpose() / itemAttrNum_da
-    # item_item_matrix = item_item_matrix.transpose()
-    #
-    # da.to_hdf5('D:\\item.hdf5', '/item_itemNet/data', item_item_matrix)
-
-    pass
-
 
 ###############################data prepare ################
 
@@ -319,10 +259,12 @@ if __name__=="__main__":
     fillnawith['artist_name'] = "no_artist"
 
 
-    item = fillNAN(item, fillnawith)
+    item = fillDscrtNAN(item, fillnawith)
+
 
     # fill na with special value calculated from data
-    pass
+
+    fillCntnueNAN(item, ['song_length'])
 
 
     # change primary key to ID
@@ -357,20 +299,37 @@ if __name__=="__main__":
 
     (itemTagmatrix,itemNoAttr) = findNetwork(itemWithTag,  fillnawith , split = r"&|\|")
 
-    LargeSparseMatrixCosine(itemTagmatrix,num=5000)
+
+# use for test
+    itemTagmatrix = itemTagmatrix[:100000,:]
+
+
+    # if you want to do it using loop , you may set num > 2
+    # if you set num = 2 ,it will do it once
+    LargeSparseMatrixCosine(itemTagmatrix,num=10,fileplace="C:\\Users\\22560\\Desktop")
+
+
+
+    itemNet = mergeDataToSparse(workfilename="C:\\Users\\22560\\Desktop",numOfFile = 1)
+
+
+
+    saveToH5(itemNet)
+
+
 
 
 
     # usrNet = calculateNet(1,1,1*1e4)
-
-
-
-    # generate two dis for test later method
-    usrDis = calculateDis(1,2,1*1e4)
-    itemDis = calculateDis(1,2,22*1e4)
-
-
-
-    (ulist, ilist , rlist) = subtractIdx(1,180*1e4,encoded=True)
-
-
+    #
+    #
+    #
+    # # generate two dis for test later method
+    # usrDis = calculateDis(1,2,1*1e4)
+    # itemDis = calculateDis(1,2,22*1e4)
+    #
+    #
+    #
+    # (ulist, ilist , rlist) = subtractIdx(1,180*1e4,encoded=True)
+    #
+    #
