@@ -311,6 +311,90 @@ xt = np.arange(20e4).reshape((2,int(10e4)))
 
 
 
+# about h5sparse
+
+
+import scipy.sparse as ss
+import h5sparse
+import numpy as np
+
+
+sparse_matrix = ss.csr_matrix([[0, 1, 0],
+  [0, 0, 1],
+  [0, 0, 0],
+  [1, 1, 0]],
+ dtype=np.float64)
+
+with h5sparse.File("test.h5") as h5f:
+    h5f.create_dataset('sparse/matrix', data=sparse_matrix)
+
+with h5sparse.File("test.h5") as h5f:
+    h5f.create_dataset('sparse/matrix2', data=h5f['sparse/matrix'])
+
+
+# read data
+
+h5f = h5sparse.File("test.h5")
+
+h5f['sparse/matrix'][1:3]
+h5f['sparse']['matrix'][1:3].toarray()
+
+
+import h5py
+
+# allow us to use h5py to get data
+h5f = h5py.File("test.h5")
+
+h5sparse.Group(h5f)['sparse/matrix']
+
+h5sparse.Dataset(h5f['sparse/matrix'])
+
+
+
+
+
+
+
+# test append method in h5sparse
+
+import h5sparse
+import h5py
+import scipy.sparse as ss
+import h5sparse
+import numpy as np
+
+x1 = np.array([[1,2,3,4],[5,6,7,8]])
+x2 = np.array([[1,2,3,4],[5,6,7,8]]) *2
+
+x1 = ss.csr_matrix(x1)
+x2 = ss.csr_matrix(x2)
+
+# you may use h5py to control data
+with h5py.File("test.h5") as h5f:
+    del h5f['sparseData/data']
+
+
+
+# use h5sparse to save data
+# 简单讲一下思路：
+#    它把稀疏矩阵的indices,index,data,存放在了h5py的一个group中
+#    使用它的h5sparse.Dataset方法可以把数据读取出来，处理为自定义的dataset类型
+
+
+# attention:
+# 1 append method can only be used when the original data is a csr_matrix
+# you must set these two paras to ensure the data is chunked :
+# chunks = (100,),maxshape = (None,)
+with h5sparse.File("test.h5") as h5f:
+    h5f.create_dataset("sparseData/data",data=x1,chunks = (100,),maxshape = (None,))
+    h5f['sparseData/data'].append(x2)
+
+
+# read data from it
+
+with  h5py.File("test.h5") as h5f:
+    print(h5sparse.Dataset(h5f['sparseData/data']).value.todense())
+
 
 
 
