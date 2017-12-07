@@ -1,18 +1,16 @@
 import pickle
+import h5py
 import h5sparse
 import gc
 import sys
 import dask.array as da
 import numpy as np
 import pandas as pd
-from    scipy.sparse          import csc_matrix
 from    scipy.sparse          import diags
 from    scipy.sparse          import csr_matrix
-from    scipy.sparse          import csc_matrix
 from    sklearn.preprocessing import LabelEncoder
 from    sltools               import pandasToSparse
 from    sltools               import sparseToPandas
-
 
 
 """
@@ -98,7 +96,7 @@ def tagCombine(tableName, tagColList, id, split="|"):
 
 
 
-def findNetwork(tableName,fillnawith,split = r"&|\|" ):
+def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
 
     #tableName = songtag;split = "|" ,
 
@@ -142,7 +140,7 @@ def findNetwork(tableName,fillnawith,split = r"&|\|" ):
     id_colNameDF = id_colNameDF[-id_colNameDF.tag.isin([ str(i)  for  i in fillnawith.values()])]
 
 
-    id_colNameDF ,colNameList = changeNameToID(id_colNameDF,'tag' ,plan="B" )
+    id_colNameDF ,colNameList = changeNameToID(id_colNameDF,'tag' ,plan= plan )
 
 
     id_colNameDF[idname] = id_colNameDF[idname].astype(int)
@@ -164,7 +162,7 @@ def findNetwork(tableName,fillnawith,split = r"&|\|" ):
 
     del id_colNameDF2
     gc.collect()
-    ObjectTagmatrix = csc_matrix((id_colNameDF['target'], (id_colNameDF[idname], id_colNameDF['tag'])))
+    ObjectTagmatrix = csr_matrix((id_colNameDF['target'], (id_colNameDF[idname], id_colNameDF['tag'])))
     del id_colNameDF
     gc.collect()
 
@@ -186,40 +184,56 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace 
                             sum(axis=1).A.ravel()
                             )
     lenOfVecAll = diags(1 / lenOfVec)
-    for i,j in enumerate(sep):
-        if i+1 < len(sep):
+    for index,value in enumerate(sep):
+        if index+1 < len(sep):
         #if i < 40:
             #print(i,j)
             # get a block from the ogininal matrix
-            block_of_sparse = largeSparseMatrix[j:sep[i+1],:]
+            block_of_sparse = largeSparseMatrix[value:sep[index+1],:]
 
             # calculate the dot
             dot_product_of_block = block_of_sparse.dot(
                                         largeSparseMatrix.transpose()
                                     )
-            lenOfBlockVec = diags(1/ lenOfVec[j:sep[i+1]])
+            lenOfBlockVec = diags(1/ lenOfVec[value:sep[index+1]])
 
             dot_cosine = lenOfBlockVec @ dot_product_of_block @ lenOfVecAll
 
-            #　we just select few of the to build net work
+            #　we just select few of them to build net work
             dot_cosine = dot_cosine > select
 
             gc.collect()
 
-            dot_cosine = sparseToPandas(dot_cosine)
-            dot_cosine.row = dot_cosine.row + j
 
-            dot_cosine.to_csv(
-                    fileplace + "dot_cosine"+str(i)+".gzip",sep = ',',
-                    index = False,
-                    encoding= "utf-8",
-                    compression = "gzip"
-                              )
+            if index == 0:
+                # if its the first loop
+                # check if dot_cosine.h5 is exists or not
+                # if exists , clean it
+                # create the file dot_cosine.h5
+                with  h5py.File(fileplace+"dot_cosine.h5") as h5f:
+                    for key in h5f.keys():
+                        del h5f[key]
+                with h5sparse.File(fileplace+"dot_cosine.h5") as h5f:
+                    h5f.create_dataset(
+                        "dot_cosineData/data", data=dot_cosine,
+                        chunks=(10000,), maxshape=(None,)
+                    )
+            else:
+                with h5sparse.File(fileplace+"dot_cosine.h5") as h5f:
+                    h5f['dot_cosineData/data'].append(dot_cosine)
 
-            del dot_cosine,lenOfBlockVec
+
+
+            del dot_cosine,lenOfBlockVec,h5f
             gc.collect()
-            print("S_item is now  preparing")
-            print( str((i+1)/len(sep)) +"percent of data is prepared ")
+            print("S_item is now  preparing \n \n")
+            preparePercent = (1+index)/len(sep)
+            print(str(preparePercent) ," percent of data is prepared \n \n")
+            print("#############  please  be patient ############## \n \n")
+
+
+
+
 
 
 
@@ -237,36 +251,6 @@ def largeMatrixDis(ObjectDis,id ):
 
 
 
-def mergeDataToSparse(workfilename,numOfFile):
-    # workfilename = "D:\\tempdata\\"
-    list = []
-    for i in range(numOfFile):
-        file = pd.read_csv(workfilename+"dot_cosine"+str(i) +".gzip" ,compression= "gzip")
-        list.append(file)
-        del file
-
-    dot_cosine = pd.concat(list)
-    dot_cosine = pandasToSparse(dot_cosine)
-    return dot_cosine
-
-
-
 
 
 # api :https://pypi.python.org/pypi/h5sparse/0.0.4
-def saveToH5(sparseMatrix,filename):
-    with h5sparse.File(filename) as h5f:
-        h5f.create_dataset('sparse/matrix', data=sparseMatrix)
-
-
-
-def laodFromH5(filename,filedir):
-    h5f = h5sparse.File(filename)
-    return h5f[filedir]
-
-
-    # h5f['sparse/matrix'][1:3].toarray()
-    # h5f['sparse']['matrix'][1:3].toarray()
-    # h5f['sparse']['matrix'].value.toarray()
-    # this one is allow you to append data ， nice ！
-

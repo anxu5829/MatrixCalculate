@@ -56,3 +56,17 @@ def load_pickle(filename):
 
 
 
+
+# # these method is aborted
+# def mergeDataToSparse(workfilename,numOfFile):
+#     # workfilename = "D:\\tempdata\\"
+#     list = []
+#     for i in range(numOfFile):
+#         file = pd.read_csv(workfilename+"dot_cosine"+str(i) +".gzip" ,compression= "gzip")
+#         list.append(file)
+#         del file
+#
+#     dot_cosine = pd.concat(list)
+#     dot_cosine = pandasToSparse(dot_cosine)
+#     return dot_cosine
+#

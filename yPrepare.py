@@ -2,15 +2,12 @@
 import  numpy as np
 import  pandas as pd
 import  os
-
 import  gc
-
 import collections
-
+import h5py
+import h5sparse
 
 from usefulTool import LargeSparseMatrixCosine
-from usefulTool import mergeDataToSparse
-from usefulTool import saveToH5
 from usefulTool import fillDscrtNAN
 from usefulTool import fillCntnueNAN
 from usefulTool import changeNameToID
@@ -99,10 +96,12 @@ if __name__=="__main__":
     item = pd.read_csv("songsCSV.csv",encoding="UTF-8" ,dtype = {
         "song_length": np.uint16,
         "language" : str
+
     })
 
 # use for debug
-    item.loc[2296320,'song_id'] = 'special'
+    item = item.loc[:300,:]
+    item.loc[301,'song_id'] = 'special'
 
     # fill na use default value , this value is also used in build social network
     # be caution ! you just need to fill those cols will be used in
@@ -155,22 +154,20 @@ if __name__=="__main__":
 
 
 # use for test
-    itemTagmatrix = itemTagmatrix[:100000,:]
+    itemTagmatrix = itemTagmatrix[:100,:]
 
 
     # if you want to do it using loop , you may set num > 2
     # if you set num = 2 ,it will do it once
-    LargeSparseMatrixCosine(itemTagmatrix,num=10,fileplace="C:\\Users\\22560\\Desktop\\")
+    # save the social network here
+    fileplace = "C:\\Users\\22560\\Desktop\\"
+    LargeSparseMatrixCosine(itemTagmatrix,num=4,fileplace=fileplace)
 
+    # laod the social network
+    h5f = h5py.File(fileplace+"dot_cosine.h5")
+    data = h5sparse.Dataset(h5f['dot_cosineData/data']).value.todense()
 
-
-    itemNet = mergeDataToSparse(workfilename="C:\\Users\\22560\\Desktop\\",numOfFile = 1)
-
-
-
-    saveToH5(itemNet)
-
-
+    print(data)
 
 
 

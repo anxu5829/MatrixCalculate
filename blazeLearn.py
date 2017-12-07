@@ -397,7 +397,3 @@ with  h5py.File("test.h5") as h5f:
 
 
 
-
-
-
-
