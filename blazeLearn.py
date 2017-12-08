@@ -244,22 +244,14 @@ f.visualize()
 #delayed
 
 # future : 可以进行并行计算
+
 from dask.distributed import Client
 
 
 # 使其满足多线程运算
 
 
-
-
-
 # 4 bag 方法：用于处理一大群零碎的文件（暂略）
-
-
-
-
-
-
 
 
 
@@ -334,7 +326,7 @@ with h5sparse.File("test.h5") as h5f:
 
 # read data
 
-h5f = h5sparse.File("test.h5")
+h5f = h5sparse.File("C:\\Users\\22560\\Desktop\\dis.h5")
 
 h5f['sparse/matrix'][1:3]
 h5f['sparse']['matrix'][1:3].toarray()
@@ -376,6 +368,7 @@ with h5py.File("test.h5") as h5f:
 
 
 # use h5sparse to save data
+# 注意：从h5sparse 中取数据只允许一次取一堆行
 # 简单讲一下思路：
 #    它把稀疏矩阵的indices,index,data,存放在了h5py的一个group中
 #    使用它的h5sparse.Dataset方法可以把数据读取出来，处理为自定义的dataset类型
@@ -397,3 +390,31 @@ with  h5py.File("test.h5") as h5f:
 
 
 
+x= np.matrix(
+    [
+        [1,2,3,4],
+        [2,3,4,4]
+
+    ]
+
+)
+
+import scipy.sparse as ss
+
+
+
+x = ss.csc_matrix(x)
+y = ss.csc_matrix([1,2,3,4])
+
+x.multiply(y)
+
+
+
+
+import numpy as np
+x = np.arange(20).reshape(10,2)
+
+
+y = -2 * x.dot(x.transpose())
+
+z = (x*x).sum(1)

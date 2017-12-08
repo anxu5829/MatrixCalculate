@@ -25,17 +25,10 @@ def fillDscrtNAN(tableName,values):
     return  tableName
 
 
-
-
-
-
 def fillCntnueNAN(tableName,values):
     # a list of continue col who will be fill with mean
     # values = ['song_length']
     tableName.loc[:, values] = tableName[values].fillna(tableName[values].mean())
-
-
-
 
 
 def changeNameToID(tableName,id , plan = 'A'):
@@ -56,11 +49,15 @@ def changeNameToID(tableName,id , plan = 'A'):
 
         originalNameCategory = originalName.astype("category", categories=originalNameUnique).cat.codes
 
+        mapdict = dict(zip(originalName, originalNameCategory))
+
         tableName[id] = originalNameCategory
 
         del originalName_index,originalNameUnique,originalNameCategory
 
-        return(tableName,originalName)
+
+
+        return(tableName,mapdict )
 
     elif plan == 'B':
 
@@ -70,9 +67,13 @@ def changeNameToID(tableName,id , plan = 'A'):
 
         originalName = tableName[id]
 
-        tableName[id] = le.transform(tableName[id])
+        originalNameCategory = le.transform(tableName[id])
 
-        return (tableName,originalName)
+        mapdict = dict(zip(originalName, originalNameCategory))
+
+        tableName[id] = originalNameCategory
+
+        return (tableName,mapdict)
 
 
 def splitDF(tableName,id,colListContinue,colListDiscrete):
@@ -93,7 +94,6 @@ def tagCombine(tableName, tagColList, id, split="|"):
     temp["concat"] = tableName[tag0].str.cat([ tableName[i] for i in tagColList if i != tag0],sep = split)
     temp = temp.set_index(tableName[id])
     return(temp)
-
 
 
 def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
@@ -166,15 +166,14 @@ def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
     del id_colNameDF
     gc.collect()
 
-    return(ObjectTagmatrix,objectHasNoTag)
+    return(ObjectTagmatrix,objectHasNoTag.values)
 
 
-
-
-
-
-
-def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace = "D:\\tempdata\\"):
+def LargeSparseMatrixCosine(largeSparseMatrix,
+                            num = 5000,select = 0.7,
+                            fileplace = "D:\\tempdata\\",
+                            prefix = "item"
+                            ):
 
     # this method will save the result in disk
     (rowNum,colNum) = largeSparseMatrix.shape
@@ -184,6 +183,7 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace 
                             sum(axis=1).A.ravel()
                             )
     lenOfVecAll = diags(1 / lenOfVec)
+    print("#############  please  be patient ############## \n \n")
     for index,value in enumerate(sep):
         if index+1 < len(sep):
         #if i < 40:
@@ -200,6 +200,15 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace 
             dot_cosine = lenOfBlockVec @ dot_product_of_block @ lenOfVecAll
 
             #　we just select few of them to build net work
+
+            ######  the following lines is to deal with Object with no tags  #####
+
+
+            dot_cosine[dot_cosine<0] = 1
+
+            ######################################################################
+
+
             dot_cosine = dot_cosine > select
 
             gc.collect()
@@ -210,26 +219,146 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace 
                 # check if dot_cosine.h5 is exists or not
                 # if exists , clean it
                 # create the file dot_cosine.h5
-                with  h5py.File(fileplace+"dot_cosine.h5") as h5f:
+                with  h5py.File(fileplace+prefix+"dot_cosine.h5") as h5f:
                     for key in h5f.keys():
                         del h5f[key]
-                with h5sparse.File(fileplace+"dot_cosine.h5") as h5f:
+                with h5sparse.File(fileplace+prefix+"dot_cosine.h5") as h5f:
                     h5f.create_dataset(
                         "dot_cosineData/data", data=dot_cosine,
                         chunks=(10000,), maxshape=(None,)
                     )
             else:
-                with h5sparse.File(fileplace+"dot_cosine.h5") as h5f:
+                with h5sparse.File(fileplace+prefix+"dot_cosine.h5") as h5f:
                     h5f['dot_cosineData/data'].append(dot_cosine)
-
 
 
             del dot_cosine,lenOfBlockVec,h5f
             gc.collect()
-            print("S_item is now  preparing \n \n")
-            preparePercent = (1+index)/len(sep)
-            print(str(preparePercent) ," percent of data is prepared \n \n")
-            print("#############  please  be patient ############## \n \n")
+            print("Social net work for " + prefix +  " is now  preparing ")
+            preparePercent = (1+index)/(len(sep)-1)
+            preparePercent = round(preparePercent,4)
+            print(str(preparePercent) ," percent of Social Network is prepared ")
+    print("#####  social net work data for  " +prefix +"  is prepared successful   ##########")
+
+
+
+def largeMatrixDis(largeDisMatrix,num = 2,
+                   netFilePlace =  "C:\\Users\\22560\\Desktop\\",
+                   prefix = "item"):
+    # load the social network
+    with  h5sparse.File(netFilePlace + prefix+"dot_cosine.h5") as h5f:
+
+        (rowNum, colNum) =largeDisMatrix.shape
+        sep = np.linspace(0, rowNum, endpoint=True, dtype=np.int64, num=num)
+        yTy = (largeDisMatrix*largeDisMatrix).sum(1)
+        print("#############  please  be patient ############## \n \n")
+        for i,j in enumerate(sep):
+            if i + 1 < len(sep):
+                blockSlice = slice(j,sep[i+1])
+                blockData = largeDisMatrix[blockSlice,:]
+                negtive2xTy = -2*blockData.dot(largeDisMatrix.transpose())
+                xTx   = yTy[blockSlice]
+                xTx   = xTx.reshape((len(xTx),1))
+
+
+                dis = yTy+ negtive2xTy + xTx
+                dis = csr_matrix(dis)
+
+                sparse = h5f['dot_cosineData/data'][blockSlice]
+
+
+                dis = dis.multiply(sparse)
+
+                if i == 0:
+                    # if its the first loop
+                    # check if dot_cosine.h5 is exists or not
+                    # if exists , clean it
+                    # create the file dot_cosine.h5
+                    with  h5py.File(netFilePlace+prefix+"dis.h5") as h5file:
+                        for key in h5file.keys():
+                            del h5file[key]
+                    with h5sparse.File(netFilePlace+prefix+"dis.h5") as h5file:
+                        h5file.create_dataset(
+                            "disData/data", data=dis,
+                            chunks=(10000,), maxshape=(None,)
+                        )
+                else:
+                    with h5sparse.File(netFilePlace+prefix+"dis.h5") as h5file:
+                        h5file['disData/data'].append(dis)
+
+                print("Dis for "+prefix+" is now  preparing ")
+                preparePercent = (1 + i) / (len(sep) - 1)
+                preparePercent = round(preparePercent, 4)
+                print(str(preparePercent), " percent of Distance data is prepared ")
+        print("############# dis data for "+ prefix +" prepared successful!! ###########")
+
+
+def subtractIdx(ObservationData, totalLen, encoded=True):
+    """
+
+    :param ObservationData: the data of (usr, item , value)
+    :param totalLen is the number of observation
+    :param encoded : using for determine  the usr , item had coded or not
+    :return: usr list , item list , rlist , using in the process of calling distance
+    """
+    if encoded == True:
+        # return a test tuple for next method
+        ulist = np.arange(totalLen)
+        ilist = np.arange(totalLen)
+        rlist = np.arange(totalLen)
+        return (ulist, ilist, rlist)
+
+    else:
+        pass
+
+
+def kernelOperator(disSquare, bandwith=4, ker="gauss"):
+    """
+
+    :param disSquare:  return the distance of Xui & X_omiga
+    :param bandwith : the bandwith of kernel
+    :param kernel :which kernel you may use
+    :return:
+    """
+    if ker == "gauss":
+        x = np.sqrt(disSquare) / bandwith
+        core = np.exp(abs(x))
+        return core
+
+
+def yGenerator(ObjectNum, mode="usr", parallel=True):
+    global usrDis, itemDis, usrNet, itemNet, ulist, ilist, rlist
+
+    if parallel == True:
+        pass
+    else:
+        if mode == "usr":
+            uid = ObjectNum
+            """
+                 S_u_omiga : is the s for usr to omiga
+                 S_i_omiga : is the s for item to omiga
+                 d_u_omiga : is the dis of usr to omiga
+                 d_i_omiga : is the dis of item to omiga
+
+            """
+
+            itemNum = itemDis.shape[0]
+            S_u_omiga = np.array([usrNet[ObjectNum, ulist] for _ in range(itemNum)])
+            S_i_omiga = itemNet[:, ilist]
+            SocialNetWork = S_i_omiga * S_u_omiga
+
+            d_u_omiga = np.array([usrDis[ObjectNum, ulist] for _ in range(itemNum)])
+            d_i_omiga = itemDis[:, ilist]
+
+            disSquare = d_i_omiga * d_u_omiga
+
+            kernel = kernelOperator(disSquare)
+
+            y = kernel * SocialNetWork.dot(rlist)
+            return (y)
+
+        elif mode == "item":
+            pass
 
 
 
@@ -241,16 +370,8 @@ def LargeSparseMatrixCosine(largeSparseMatrix,num = 5000,select = 0.7,fileplace 
 
 
 
-def largeMatrixDis(ObjectDis,id ):
-    # id = "song_id"
-    pass
 
 
 
 
 
-
-
-
-
-# api :https://pypi.python.org/pypi/h5sparse/0.0.4
