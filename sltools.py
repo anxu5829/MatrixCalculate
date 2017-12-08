@@ -46,13 +46,13 @@ def load_sparse_csc(filename):
 # save / load data using cPickle
 
 
-def save_pickle(matrix, filename):
+def save_pickle(Object, filename):
     with open(filename, 'wb') as outfile:
-        pickle.dump(matrix, outfile, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(Object, outfile, pickle.HIGHEST_PROTOCOL)
 def load_pickle(filename):
     with open(filename, 'rb') as infile:
-        matrix = pickle.load(infile)
-    return matrix
+        Object = pickle.load(infile)
+    return Object
 
 
 

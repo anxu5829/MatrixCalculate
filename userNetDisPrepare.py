@@ -11,11 +11,14 @@ import h5sparse
 from usefulTool import LargeSparseMatrixCosine
 from usefulTool import fillDscrtNAN
 from usefulTool import fillCntnueNAN
+from usefulTool import scaleCntnueVariable
 from usefulTool import changeNameToID
 from usefulTool import splitDF
 from usefulTool import tagCombine
 from usefulTool import findNetwork
 from usefulTool import largeMatrixDis
+from sltools    import save_pickle
+
 
 def extractUserInfo():
     ####################           change dir       ######################
@@ -73,9 +76,12 @@ def extractUserInfo():
     user.cntinue = user.cntinue.dt.days
     # other info can derived from user.continue.dt.components
 
-    fillCntnueNAN(user,'cntinue')
+    fillCntnueNAN(user,['cntinue'])
+    scaleCntnueVariable(user,['cntinue'])
 
-    user,user_id_dict = changeNameToID(user,'msno',plan='B')
+
+
+    user,user_id_dict = changeNameToID(user,'msno',plan='A')
 
     (userCntnueAttr, userDscrtAttr) = \
         splitDF(user, "msno",
@@ -98,10 +104,13 @@ def extractUserInfo():
         userTagmatrix[row, :] = -1
 
     fileplace = "C:\\Users\\22560\\Desktop\\"
-    LargeSparseMatrixCosine(userTagmatrix, num=2, fileplace=fileplace,prefix="user")
+    LargeSparseMatrixCosine(userTagmatrix,userNoAttr, num=2, fileplace=fileplace,prefix="user")
 
    # prepare largeDisMatrix
     userCntnueAttr.set_index("msno", inplace=True)
 
     largeMatrixDis(userCntnueAttr.values, num=2,
                    netFilePlace=fileplace ,prefix="user")
+
+    save_pickle(user_id_dict, fileplace + "user_id_dict")
+    # return(user_id_dict)

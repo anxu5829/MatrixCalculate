@@ -31,6 +31,13 @@ def fillCntnueNAN(tableName,values):
     tableName.loc[:, values] = tableName[values].fillna(tableName[values].mean())
 
 
+def scaleCntnueVariable(tableName , values):
+    for value in values:
+        tableName[value] = (tableName[value] - tableName[value].mean()) / tableName[value].std()
+
+
+
+
 def changeNameToID(tableName,id , plan = 'A'):
     """
 
@@ -169,7 +176,7 @@ def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
     return(ObjectTagmatrix,objectHasNoTag.values)
 
 
-def LargeSparseMatrixCosine(largeSparseMatrix,
+def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
                             num = 5000,select = 0.7,
                             fileplace = "D:\\tempdata\\",
                             prefix = "item"
@@ -206,6 +213,9 @@ def LargeSparseMatrixCosine(largeSparseMatrix,
 
             dot_cosine[dot_cosine<0] = 1
 
+            dot_cosine[:,ObjectNoAttr] = 0
+
+            dot_cosine[ObjectNoAttr,ObjectNoAttr] = 1
             ######################################################################
 
 
@@ -359,10 +369,6 @@ def yGenerator(ObjectNum, mode="usr", parallel=True):
 
         elif mode == "item":
             pass
-
-
-
-
 
 
 

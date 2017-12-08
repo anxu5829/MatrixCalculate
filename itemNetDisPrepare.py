@@ -9,11 +9,13 @@ import pandas as pd
 from usefulTool import LargeSparseMatrixCosine
 from usefulTool import fillDscrtNAN
 from usefulTool import fillCntnueNAN
+from usefulTool import scaleCntnueVariable
 from usefulTool import changeNameToID
 from usefulTool import splitDF
 from usefulTool import tagCombine
 from usefulTool import findNetwork
 from usefulTool import largeMatrixDis
+from sltools    import save_pickle
 
 
 
@@ -26,7 +28,6 @@ def extractItemInfo():
     item = pd.read_csv("songsCSV.csv", encoding="UTF-8", dtype={
         "song_length": np.uint16,
         "language": str,
-
 
     },iterator= True)
 
@@ -51,9 +52,12 @@ def extractItemInfo():
     # fill na with special value calculated from data
 
     fillCntnueNAN(item, ['song_length'])
+    scaleCntnueVariable(item,['song_length'])
 
     # change primary key to ID
-    item, song_id_dict = changeNameToID(item, 'song_id', plan="A")
+    item, item_id_dict = changeNameToID(item, 'song_id', plan="A")
+
+
 
     # split the dataframe to two , one of it is containing  the continue attr
     # the other containing the discrete attr
@@ -86,6 +90,7 @@ def extractItemInfo():
     # the method is to let itemTagmatrix has -1 on the elements of that row so that
     # the cosine value may be minus then  you can identify it and turn it to 1
 
+
     for row in itemNoAttr:
         itemTagmatrix[row, :] = -1
 
@@ -93,7 +98,7 @@ def extractItemInfo():
     # if you set num = 2 ,it will do it once
     # save the social network here
     fileplace = "C:\\Users\\22560\\Desktop\\"
-    LargeSparseMatrixCosine(itemTagmatrix, num=2, fileplace=fileplace,prefix="item")
+    LargeSparseMatrixCosine(itemTagmatrix, itemNoAttr,num=2, fileplace=fileplace,prefix="item")
 
 
 
@@ -105,4 +110,8 @@ def extractItemInfo():
 
     largeMatrixDis(itemCntnueAttr.values, num=2,
                    netFilePlace=fileplace,prefix="item")
+
+    save_pickle(item_id_dict, fileplace+"item_id_dict")
+
+    #return(item_id_dict)
 
