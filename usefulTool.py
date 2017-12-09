@@ -260,6 +260,7 @@ def largeMatrixDis(largeDisMatrix,num = 2,
     with  h5sparse.File(netFilePlace + prefix+"dot_cosine.h5") as h5f:
 
         (rowNum, colNum) =largeDisMatrix.shape
+
         sep = np.linspace(0, rowNum, endpoint=True, dtype=np.int64, num=num)
         yTy = (largeDisMatrix*largeDisMatrix).sum(1)
         print("#############  please  be patient ############## \n \n")

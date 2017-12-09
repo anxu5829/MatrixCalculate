@@ -10,6 +10,7 @@ from itemNetDisPrepare import extractItemInfo
 from userNetDisPrepare import extractUserInfo
 import dask.array as da
 import h5sparse
+import h5py
 
 
 
@@ -18,145 +19,263 @@ def kernel(x):
     return np.exp(- np.sqrt(x)/h )
 
 
-def yPrepareForBigData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
-
-
-    usrList = [user_id_dict[user] for user in user_id_dict]
-    usrList.sort()
-    usrList = np.array(usrList)
-
-
-
-
-    # select the data from train which is related with usrNowDealing
-    with h5sparse.File(filePlace+"userdot_cosine.h5") as user_net:
-        # get the relationship between user u and other user:
-        usrRelationship = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].toarray().ravel()
-        usrHasRelation = usrList[usrRelationship]
-    trainHasRelation = train[train[user_id].\
-            isin(usrHasRelation)].sort_values(by = [item_id])
-
-    relatedItem = trainHasRelation[item_id].values
-    relatedUser = trainHasRelation[user_id].values
-    relatedTarget = trainHasRelation[target_id]
-
-    # get the item-train-sized net work
-    with h5sparse.File(filePlace+"itemdot_cosine.h5") as item_net:
-        itemRelationship = item_net['dot_cosineData/data']
-        itemToitemNetRelated = [itemRelationship[itemRelated:(itemRelated+1)] for itemRelated in relatedItem]
-        itemToitemNetRelated = vstack(itemToitemNetRelated).transpose()
-
-
-    # get the item-train-sized kernel data
-
-
-    # get the item-train-sized x data
-
-    with h5sparse.File(filePlace+"itemdis.h5") as item_dis:
-        # 一次从外存中取一行的效率太低了
-        # 要改
-        # 对于 no tag 数据还有大问题
-        itemDisRelationship = item_dis['disData/data']
-        itemToitemDisRelated = [itemDisRelationship[itemDisRelated:(itemDisRelated+1)] for itemDisRelated in relatedItem]
-        itemToitemDisRelated = vstack(itemToitemDisRelated).transpose()
-
-    # broadcast with the user-train-sized x data
-    with h5sparse.File(filePlace+"userdis.h5") as user_dis:
-        userDisRelationship = user_dis['disData/data']\
-            [userNowDealing:(userNowDealing+1)]
-        userDisRelationship = userDisRelationship[:,relatedUser].todense()
-
-    itemToitemDisRelated = itemToitemDisRelated + userDisRelationship
-    itemToitemDisRelated = kernel(itemToitemDisRelated)
-
-    weight = itemToitemNetRelated.multiply(itemToitemDisRelated)
-
-    weight_sum  = diags(1/ weight.sum(1).A.ravel())
-    weight = weight_sum @ weight
-
-    y = weight.dot(relatedTarget.transpose())
-    return(y)
-
-def yPrepareForSmallData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
-
+def yPrepareForBigData(user_num ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
 
     usrList = [user_id_dict[user] for user in user_id_dict]
     usrList.sort()
     usrList = np.array(usrList)
 
     # select the data from train which is related with usrNowDealing
-    with h5sparse.File(filePlace+"userdot_cosine.h5") as user_net:
-        # get the relationship between user u and other user:
-        usrRelationship = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].toarray().ravel()
-        usrHasRelation = usrList[usrRelationship]
-    trainHasRelation = train[train[user_id].\
-            isin(usrHasRelation)].sort_values(by = [item_id])
+    with h5sparse.File(filePlace+"userdot_cosine.h5",'r') as user_net,\
+        h5sparse.File(filePlace + "itemdot_cosine.h5",'r') as item_net,\
+        h5sparse.File(filePlace + "itemdis.h5",'r') as item_dis,\
+        h5sparse.File(filePlace + "userdis.h5",'r') as user_dis,\
+        h5py.File(filePlace + "yPrepare.h5")  as yPrepare   :
 
-    relatedItem = trainHasRelation[item_id].values
-    relatedUser = trainHasRelation[user_id].values
-    relatedTarget = trainHasRelation[target_id]
 
-    # get the item-train-sized net work
-    with h5sparse.File(filePlace+"itemdot_cosine.h5") as item_net:
+        # # use for test
+        # user_net = h5sparse.File(filePlace+"userdot_cosine.h5")
+        # item_net = h5sparse.File(filePlace + "itemdot_cosine.h5")
+        # item_dis = h5sparse.File(filePlace + "itemdis.h5")
+        # user_dis = h5sparse.File(filePlace + "userdis.h5")
+        # yPrepare =  h5py.File(filePlace + "yPrepare.h5")
+
+
+        # code can be used several times
+
+        # load the item relationship
         itemRelationship = item_net['dot_cosineData/data'].value
-        itemToitemNetRelated = itemRelationship[:,relatedItem]
-        del itemRelationship ;gc.collect()
-
-
-
-    # get the item-train-sized kernel data
-
-    # get the item-train-sized x data
-
-
-    with h5sparse.File(filePlace+"itemdis.h5") as item_dis:
         itemDisRelationship = item_dis['disData/data'].value
-        itemToitemDisRelated = itemDisRelationship[:,relatedItem]
-        del itemDisRelationship ; gc.collect()
-
-    # broadcast with the user-train-sized x data
-    with h5sparse.File(filePlace+"userdis.h5") as user_dis:
-        userDisRelationship = user_dis['disData/data']\
-            [userNowDealing:(userNowDealing+1)]
-        userDisRelationship = userDisRelationship[:,relatedUser].todense()
-
-
-    # it will cause memmory error here
 
 
 
-    userDisRelationship = userDisRelationship.A.ravel()
+        print("start preparing y !! , please be patient \n")
+        # code related to usrNowdealing
+        for userNowDealing in range(user_num):
+
+            # obtain the useful train dataset
+            usrRelationshipUsed = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].\
+                                            toarray().ravel()
+
+            # get data which has relationship with userNowDealing
+            usrHasRelation = usrList[usrRelationshipUsed]
+            trainHasRelation = train[train[user_id].\
+                isin(usrHasRelation)].sort_values(by = [item_id])
 
 
-    _idptr = itemToitemDisRelated.indptr
-    _data  = userDisRelationship[itemToitemDisRelated.indices]
-    _idces = itemToitemDisRelated.indices
+            relatedItem = trainHasRelation[item_id].values
+            relatedUser = trainHasRelation[user_id].values
+            relatedTarget = trainHasRelation[target_id]
+
+            del usrHasRelation,trainHasRelation
+
+            # get the item-train-sized  item net work
+            itemToitemNetRelated = itemRelationship[:,relatedItem]
+
+            gc.collect()
 
 
-    userDisRelationship  =  csr_matrix((_data,_idces,_idptr))
+
+            # get the item-train-sized kernel data
 
 
-    del _idptr ; _data ; _idces
-    gc.collect()
+            # get the item-train-sized  item  dis data
+            itemToitemDisRelated = itemDisRelationship[:,relatedItem]
 
-    weight =  userDisRelationship + itemToitemDisRelated
-    weight.data = kernel(weight.data)
+            gc.collect()
 
-    del userDisRelationship,itemToitemDisRelated
-    gc.collect()
+            # broadcast with the user-train-sized x data
 
-    weight_sum =  weight.sum(1).A.ravel()
+            ## obtain user relationship with train
+            userDisRelationship = user_dis['disData/data']\
+                [userNowDealing:(userNowDealing+1)]
+            userDisRelationship = userDisRelationship[:,relatedUser].todense()
 
-    weight_sum_reciprocal = diags( 1/weight_sum )
 
-    del weight_sum
-    gc.collect()
+            # turn it to sparse like matrix
+            userDisRelationship = userDisRelationship.A.ravel()
 
-    y = weight_sum_reciprocal.dot(weight).dot(trainHasRelation[target_id])
 
-    del weight,weight_sum_reciprocal,trainHasRelation
+            _idptr = itemToitemNetRelated.indptr
+            _data  = userDisRelationship[itemToitemNetRelated.indices]
+            _idces = itemToitemNetRelated.indices
 
-    
+
+            userDisRelationship  =  csr_matrix((_data,_idces,_idptr))
+
+
+            del _idptr ; _data ; _idces
+            gc.collect()
+
+            # calculate kernel
+            weight =  userDisRelationship + itemToitemDisRelated
+            weight.data = kernel(weight.data)
+
+            del userDisRelationship,itemToitemDisRelated
+            gc.collect()
+
+            weight_sum =  weight.sum(1).A.ravel()
+
+            weight_sum_reciprocal = diags( 1/weight_sum )
+
+            del weight_sum
+            gc.collect()
+
+            y = weight_sum_reciprocal.dot(weight).dot(relatedTarget)
+
+
+            # make sure your dataset is cleaned before iteration
+            if userNowDealing == 0:
+                for key in yPrepare.keys():
+                    del yPrepare[key]
+
+
+
+            if userNowDealing ==0:
+                yset = yPrepare.create_dataset("/yData/y",shape = (1,len(y)), maxshape=(None,len(y)) ,chunks = (1,len(y)),dtype=np.float32)
+                yset[:] = y
+            else:
+
+                yset.resize(userNowDealing+1,axis = 0)
+                yset[userNowDealing,:] = y
+
+
+            del weight,weight_sum_reciprocal,trainHasRelation
+
+            if(userNowDealing%10 ==0):
+                print("the   ",np.round((userNowDealing+1)/(user_num-1),3 ),"  of data is prepared \n please be patient")
+
+
+
+def yPrepareForSmallData(user_num,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
+
+
+    usrList = [user_id_dict[user] for user in user_id_dict]
+    usrList.sort()
+    usrList = np.array(usrList)
+
+    # select the data from train which is related with usrNowDealing
+    with h5sparse.File(filePlace+"userdot_cosine.h5",'r') as user_net,\
+        h5sparse.File(filePlace + "itemdot_cosine.h5",'r') as item_net,\
+        h5sparse.File(filePlace + "itemdis.h5",'r') as item_dis,\
+        h5sparse.File(filePlace + "userdis.h5",'r') as user_dis,\
+        h5py.File(filePlace + "yPrepare.h5")  as yPrepare   :
+
+
+        # # use for test
+        # user_net = h5sparse.File(filePlace+"userdot_cosine.h5")
+        # item_net = h5sparse.File(filePlace + "itemdot_cosine.h5")
+        # item_dis = h5sparse.File(filePlace + "itemdis.h5")
+        # user_dis = h5sparse.File(filePlace + "userdis.h5")
+        # yPrepare =  h5py.File(filePlace + "yPrepare.h5")
+
+
+        # code can be used several times
+
+        # load the item relationship
+        itemRelationship = item_net['dot_cosineData/data'].value
+        itemDisRelationship = item_dis['disData/data'].value
+
+
+
+        print("start preparing y !! , please be patient \n")
+        # code related to usrNowdealing
+        for userNowDealing in range(user_num):
+
+            # obtain the useful train dataset
+            usrRelationshipUsed = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].\
+                                            toarray().ravel()
+
+            # get data which has relationship with userNowDealing
+            usrHasRelation = usrList[usrRelationshipUsed]
+            trainHasRelation = train[train[user_id].\
+                isin(usrHasRelation)].sort_values(by = [item_id])
+
+
+
+            relatedItem = trainHasRelation[item_id].values
+            relatedUser = trainHasRelation[user_id].values
+            relatedTarget = trainHasRelation[target_id]
+
+
+
+
+            # get the item-train-sized  item net work
+            itemToitemNetRelated = itemRelationship[:,relatedItem]
+
+            gc.collect()
+
+
+
+            # get the item-train-sized kernel data
+
+
+            # get the item-train-sized  item  dis data
+            itemToitemDisRelated = itemDisRelationship[:,relatedItem]
+
+            gc.collect()
+
+            # broadcast with the user-train-sized x data
+
+            ## obtain user relationship with train
+            userDisRelationship = user_dis['disData/data']\
+                [userNowDealing:(userNowDealing+1)]
+            userDisRelationship = userDisRelationship[:,relatedUser].todense()
+
+
+            # turn it to sparse like matrix
+            userDisRelationship = userDisRelationship.A.ravel()
+
+
+            _idptr = itemToitemNetRelated.indptr
+            _data  = userDisRelationship[itemToitemNetRelated.indices]
+            _idces = itemToitemNetRelated.indices
+
+
+            userDisRelationship  =  csr_matrix((_data,_idces,_idptr))
+
+
+            del _idptr ; _data ; _idces
+            gc.collect()
+
+            # calculate kernel
+            weight =  userDisRelationship + itemToitemDisRelated
+            weight.data = kernel(weight.data)
+
+            del userDisRelationship,itemToitemDisRelated
+            gc.collect()
+
+            weight_sum =  weight.sum(1).A.ravel()
+
+            weight_sum_reciprocal = diags( 1/weight_sum )
+
+            del weight_sum
+            gc.collect()
+
+            y = weight_sum_reciprocal.dot(weight).dot(relatedTarget)
+
+
+            # make sure your dataset is cleaned before iteration
+            if userNowDealing == 0:
+                for key in yPrepare.keys():
+                    del yPrepare[key]
+
+
+
+            if userNowDealing ==0:
+                yset = yPrepare.create_dataset("/yData/y",shape = (1,len(y)), maxshape=(None,len(y)) ,chunks = (1,len(y)),dtype=np.float32)
+                yset[:] = y
+            else:
+
+                yset.resize(userNowDealing+1,axis = 0)
+                yset[userNowDealing,:] = y
+
+
+            del weight,weight_sum_reciprocal,trainHasRelation
+
+            if(userNowDealing%10 ==0):
+                print("the   ",np.round((userNowDealing+1)/(user_num-1),3 ),"  of data is prepared \n \n please be patient")
+
 
 
 def main():
@@ -197,11 +316,11 @@ def main():
     gc.collect()
 
 
-    userNowDealing = 0
+    print("train data has prepared !")
 
     # we are now start to prepare y
-
-    y = yPrepareForBigData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train)
+    user_num = len(user_id_dict.keys())
+    yPrepareForSmallData(user_num,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train)
 
 
 

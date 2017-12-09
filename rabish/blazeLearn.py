@@ -415,6 +415,44 @@ import numpy as np
 x = np.arange(20).reshape(10,2)
 
 
+
 y = -2 * x.dot(x.transpose())
 
 z = (x*x).sum(1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
