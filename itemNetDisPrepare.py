@@ -32,7 +32,7 @@ def extractItemInfo():
     },iterator= True)
 
     # use for debug
-    chunksize = 10000
+    chunksize = 50000
     item = item.get_chunk(chunksize)
     item.loc[chunksize+1, 'song_id'] = 'specialll'
     item.loc[chunksize+2, 'song_id'] = 'special22'
@@ -98,7 +98,7 @@ def extractItemInfo():
     # if you set num = 2 ,it will do it once
     # save the social network here
     fileplace = "C:\\Users\\22560\\Desktop\\"
-    LargeSparseMatrixCosine(itemTagmatrix, itemNoAttr,num=2, fileplace=fileplace,prefix="item")
+    LargeSparseMatrixCosine(itemTagmatrix, itemNoAttr,num=40, fileplace=fileplace,prefix="item")
 
 
 
@@ -108,7 +108,7 @@ def extractItemInfo():
     # prepare largeDisMatrix
     itemCntnueAttr.set_index("song_id", inplace=True)
 
-    largeMatrixDis(itemCntnueAttr.values, num=2,
+    largeMatrixDis(itemCntnueAttr.values, num=40,
                    netFilePlace=fileplace,prefix="item")
 
     save_pickle(item_id_dict, fileplace+"item_id_dict")

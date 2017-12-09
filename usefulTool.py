@@ -191,6 +191,7 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
                             )
     lenOfVecAll = diags(1 / lenOfVec)
     print("#############  please  be patient ############## \n \n")
+    print("### object size is   " +str(rowNum) +"*"+ str(rowNum) + "  ####" )
     for index,value in enumerate(sep):
         if index+1 < len(sep):
         #if i < 40:
@@ -211,11 +212,11 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
             ######  the following lines is to deal with Object with no tags  #####
 
 
-            dot_cosine[dot_cosine<0] = 1
 
             dot_cosine[:,ObjectNoAttr] = 0
 
-            dot_cosine[ObjectNoAttr,ObjectNoAttr] = 1
+            flag = ((dot_cosine.sum(1) < 0).A.ravel())
+            dot_cosine[flag,:] = 1
             ######################################################################
 
 
@@ -262,6 +263,7 @@ def largeMatrixDis(largeDisMatrix,num = 2,
         sep = np.linspace(0, rowNum, endpoint=True, dtype=np.int64, num=num)
         yTy = (largeDisMatrix*largeDisMatrix).sum(1)
         print("#############  please  be patient ############## \n \n")
+        print("### object size is  " + str(rowNum) + "*" + str(rowNum) + "  ####")
         for i,j in enumerate(sep):
             if i + 1 < len(sep):
                 blockSlice = slice(j,sep[i+1])

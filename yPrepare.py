@@ -8,6 +8,7 @@ from scipy.sparse import  csr_matrix
 from scipy.sparse import  diags
 from itemNetDisPrepare import extractItemInfo
 from userNetDisPrepare import extractUserInfo
+import dask.array as da
 import h5sparse
 
 
@@ -17,7 +18,7 @@ def kernel(x):
     return np.exp(- np.sqrt(x)/h )
 
 
-def yPrepare(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
+def yPrepareForBigData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
 
 
     usrList = [user_id_dict[user] for user in user_id_dict]
@@ -52,6 +53,9 @@ def yPrepare(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id
     # get the item-train-sized x data
 
     with h5sparse.File(filePlace+"itemdis.h5") as item_dis:
+        # 一次从外存中取一行的效率太低了
+        # 要改
+        # 对于 no tag 数据还有大问题
         itemDisRelationship = item_dis['disData/data']
         itemToitemDisRelated = [itemDisRelationship[itemDisRelated:(itemDisRelated+1)] for itemDisRelated in relatedItem]
         itemToitemDisRelated = vstack(itemToitemDisRelated).transpose()
@@ -73,6 +77,86 @@ def yPrepare(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id
     y = weight.dot(relatedTarget.transpose())
     return(y)
 
+def yPrepareForSmallData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train):
+
+
+    usrList = [user_id_dict[user] for user in user_id_dict]
+    usrList.sort()
+    usrList = np.array(usrList)
+
+    # select the data from train which is related with usrNowDealing
+    with h5sparse.File(filePlace+"userdot_cosine.h5") as user_net:
+        # get the relationship between user u and other user:
+        usrRelationship = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].toarray().ravel()
+        usrHasRelation = usrList[usrRelationship]
+    trainHasRelation = train[train[user_id].\
+            isin(usrHasRelation)].sort_values(by = [item_id])
+
+    relatedItem = trainHasRelation[item_id].values
+    relatedUser = trainHasRelation[user_id].values
+    relatedTarget = trainHasRelation[target_id]
+
+    # get the item-train-sized net work
+    with h5sparse.File(filePlace+"itemdot_cosine.h5") as item_net:
+        itemRelationship = item_net['dot_cosineData/data'].value
+        itemToitemNetRelated = itemRelationship[:,relatedItem]
+        del itemRelationship ;gc.collect()
+
+
+
+    # get the item-train-sized kernel data
+
+    # get the item-train-sized x data
+
+
+    with h5sparse.File(filePlace+"itemdis.h5") as item_dis:
+        itemDisRelationship = item_dis['disData/data'].value
+        itemToitemDisRelated = itemDisRelationship[:,relatedItem]
+        del itemDisRelationship ; gc.collect()
+
+    # broadcast with the user-train-sized x data
+    with h5sparse.File(filePlace+"userdis.h5") as user_dis:
+        userDisRelationship = user_dis['disData/data']\
+            [userNowDealing:(userNowDealing+1)]
+        userDisRelationship = userDisRelationship[:,relatedUser].todense()
+
+
+    # it will cause memmory error here
+
+
+
+    userDisRelationship = userDisRelationship.A.ravel()
+
+
+    _idptr = itemToitemDisRelated.indptr
+    _data  = userDisRelationship[itemToitemDisRelated.indices]
+    _idces = itemToitemDisRelated.indices
+
+
+    userDisRelationship  =  csr_matrix((_data,_idces,_idptr))
+
+
+    del _idptr ; _data ; _idces
+    gc.collect()
+
+    weight =  userDisRelationship + itemToitemDisRelated
+    weight.data = kernel(weight.data)
+
+    del userDisRelationship,itemToitemDisRelated
+    gc.collect()
+
+    weight_sum =  weight.sum(1).A.ravel()
+
+    weight_sum_reciprocal = diags( 1/weight_sum )
+
+    del weight_sum
+    gc.collect()
+
+    y = weight_sum_reciprocal.dot(weight).dot(trainHasRelation[target_id])
+
+    del weight,weight_sum_reciprocal,trainHasRelation
+
+    
 
 
 def main():
@@ -81,8 +165,7 @@ def main():
     filePlace = "C:\\Users\\22560\\Desktop\\"
 
 
-    extractItemInfo()
-    extractUserInfo()
+
 
     user_id_dict = load_pickle(filePlace+"user_id_dict")
     item_id_dict = load_pickle(filePlace+"item_id_dict")
@@ -111,19 +194,20 @@ def main():
 
     train = train.groupby([user_id,item_id])['target'].sum().reset_index()
 
-
+    gc.collect()
 
 
     userNowDealing = 0
 
-    y = yPrepare(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train)
+    # we are now start to prepare y
+
+    y = yPrepareForBigData(userNowDealing ,user_id_dict,item_id_dict,filePlace,item_id,user_id,target_id,train)
 
 
 
 if __name__=="__main__":
-
-
-
+    #extractItemInfo()
+    #extractUserInfo()
 
 
     main()
