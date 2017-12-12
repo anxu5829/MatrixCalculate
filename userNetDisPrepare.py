@@ -54,7 +54,7 @@ def extractUserInfo():
 
 
 # use for test
-    chunksize = 30000
+    chunksize =30000 #30000
     user  = user.get_chunk(chunksize)
     user.loc[chunksize+1,'msno'] = "special"
     user.loc[chunksize+2,'msno'] = 'special2'
@@ -103,13 +103,13 @@ def extractUserInfo():
     for row in userNoAttr:
         userTagmatrix[row, :] = -1
 
-    fileplace = "C:\\Users\\22560\\Desktop\\"
+    fileplace = "D:\\"
     LargeSparseMatrixCosine(userTagmatrix,userNoAttr, num=20, fileplace=fileplace,prefix="user")
 
    # prepare largeDisMatrix
     userCntnueAttr.set_index("msno", inplace=True)
 
-    largeMatrixDis(userCntnueAttr.values, num=20,
+    largeMatrixDis(userCntnueAttr.values, num=50,
                    netFilePlace=fileplace ,prefix="user")
 
     save_pickle(user_id_dict, fileplace + "user_id_dict")

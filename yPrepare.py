@@ -180,17 +180,20 @@ def yPrepareForSmallData(user_num,user_id_dict,item_id_dict,filePlace,item_id,us
 
         print("start preparing y !! , please be patient \n")
         # code related to usrNowdealing
-        for userNowDealing in range(user_num):
+        for userNowDealing in   range(user_num):
 
             # obtain the useful train dataset
             usrRelationshipUsed = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].\
                                             toarray().ravel()
+
 
             # get data which has relationship with userNowDealing
             usrHasRelation = usrList[usrRelationshipUsed]
             trainHasRelation = train[train[user_id].\
                 isin(usrHasRelation)].sort_values(by = [item_id])
 
+            if trainHasRelation.empty:
+                trainHasRelation = train.sample(frac = 0.1)
 
 
             relatedItem = trainHasRelation[item_id].values
@@ -281,7 +284,7 @@ def yPrepareForSmallData(user_num,user_id_dict,item_id_dict,filePlace,item_id,us
 def main():
 
 
-    filePlace = "C:\\Users\\22560\\Desktop\\"
+    filePlace = "D:\\"
 
 
 

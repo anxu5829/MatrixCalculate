@@ -32,10 +32,6 @@ zdot = z.dot(z.transpose())
 
 
 
-
-
-
-
 # 可以很方便的从zdot中提取数据
 arrayNeed = zdot[1,:].compute()
 
@@ -65,7 +61,6 @@ dd = da.from_array(d,chunks=(10000,10000))
 
 x = np.ones((2,100000))
 y = x.dot(dd)
-
 
 
 # 关于hdf5 的管理
