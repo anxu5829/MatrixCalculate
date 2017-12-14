@@ -25,10 +25,14 @@ def fillDscrtNAN(tableName,values):
     return  tableName
 
 
-def fillCntnueNAN(tableName,values):
+
+def fillCntnueNAN(tableName,values,id):
     # a list of continue col who will be fill with mean
     # values = ['song_length']
+    # return those rows who has not any continue attr
+    objectHasntCntnue = tableName[[id]][tableName[values].isna().sum(1) >= len(values)].values.flatten()
     tableName.loc[:, values] = tableName[values].fillna(tableName[values].mean())
+    return objectHasntCntnue
 
 
 def scaleCntnueVariable(tableName , values):
@@ -96,11 +100,18 @@ def tagCombine(tableName, tagColList, id, split="|"):
     for i in tagColList:
         tableName.loc[:,i] = tableName[i].str.strip()
 
-    tag0 = tagColList[0]
-    temp = pd.DataFrame()
-    temp["concat"] = tableName[tag0].str.cat([ tableName[i] for i in tagColList if i != tag0],sep = split)
-    temp = temp.set_index(tableName[id])
+    if tableName.shape[1] > 2:
+        tag0 = tagColList[0]
+        temp = pd.DataFrame()
+        temp["concat"] = tableName[tag0].str.cat([ tableName[i] for i in tagColList if i != tag0],sep = split)
+        temp = temp.set_index(tableName[id])
+    else:
+        temp = tableName
+        temp.rename(columns = {tagColList[0]:'concat'},inplace = True)
+        temp = temp.set_index(tableName[id])
+        temp.pop(id)
     return(temp)
+
 
 
 def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
@@ -181,7 +192,7 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
                             fileplace = "D:\\tempdata\\",
                             prefix = "item"
                             ):
-
+    # 如果对应对象没有分类，那么会把它和任何人的关系设为1
     # this method will save the result in disk
     (rowNum,colNum) = largeSparseMatrix.shape
     sep = np.linspace(0,rowNum,endpoint=True,dtype=np.int64,num=num)
@@ -208,19 +219,13 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
             dot_cosine = lenOfBlockVec @ dot_product_of_block @ lenOfVecAll
 
             #　we just select few of them to build net work
-
-            ######  the following lines is to deal with Object with no tags  #####
-
-
-
-            dot_cosine[:,ObjectNoAttr] = 0
-
-            flag = ((dot_cosine.sum(1) < 0).A.ravel())
-            dot_cosine[flag,:] = 1
-            ######################################################################
-
-
             dot_cosine = dot_cosine > select
+
+            HasObjectWithNoAttr =np.array(list( set(ObjectNoAttr) & set(list(range(value, sep[index + 1])))))
+
+            if( len(HasObjectWithNoAttr) != 0 ):
+                dot_cosine[HasObjectWithNoAttr-value,:] = 1
+
 
             gc.collect()
 
@@ -253,9 +258,10 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
 
 
 
-def largeMatrixDis(largeDisMatrix,num = 2,
+def largeMatrixDis(largeDisMatrix,ObjectHasntCntnue,num = 2,
                    netFilePlace =  "C:\\Users\\22560\\Desktop\\",
                    prefix = "item"):
+    # 如果人和人之间的连续变量确实，将xi - xj 设置为0
     # load the social network
     with  h5sparse.File(netFilePlace + prefix+"dot_cosine.h5") as h5f:
 
@@ -282,6 +288,11 @@ def largeMatrixDis(largeDisMatrix,num = 2,
 
                 dis = dis.multiply(sparse)
 
+                HasObjectWithNoCntnue = np.array(list(set(ObjectHasntCntnue) & set(list(range(i, sep[j+ 1])))))
+
+                if (len(HasObjectWithNoCntnue) != 0):
+                    dis[HasObjectWithNoCntnue - i, :] = 0
+
                 if i == 0:
                     # if its the first loop
                     # check if dot_cosine.h5 is exists or not
@@ -306,72 +317,13 @@ def largeMatrixDis(largeDisMatrix,num = 2,
         print("############# dis data for "+ prefix +" prepared successful!! ###########")
 
 
-def subtractIdx(ObservationData, totalLen, encoded=True):
-    """
-
-    :param ObservationData: the data of (usr, item , value)
-    :param totalLen is the number of observation
-    :param encoded : using for determine  the usr , item had coded or not
-    :return: usr list , item list , rlist , using in the process of calling distance
-    """
-    if encoded == True:
-        # return a test tuple for next method
-        ulist = np.arange(totalLen)
-        ilist = np.arange(totalLen)
-        rlist = np.arange(totalLen)
-        return (ulist, ilist, rlist)
-
-    else:
-        pass
 
 
-def kernelOperator(disSquare, bandwith=4, ker="gauss"):
-    """
-
-    :param disSquare:  return the distance of Xui & X_omiga
-    :param bandwith : the bandwith of kernel
-    :param kernel :which kernel you may use
-    :return:
-    """
-    if ker == "gauss":
-        x = np.sqrt(disSquare) / bandwith
-        core = np.exp(abs(x))
-        return core
 
 
-def yGenerator(ObjectNum, mode="usr", parallel=True):
-    global usrDis, itemDis, usrNet, itemNet, ulist, ilist, rlist
-
-    if parallel == True:
-        pass
-    else:
-        if mode == "usr":
-            uid = ObjectNum
-            """
-                 S_u_omiga : is the s for usr to omiga
-                 S_i_omiga : is the s for item to omiga
-                 d_u_omiga : is the dis of usr to omiga
-                 d_i_omiga : is the dis of item to omiga
-
-            """
-
-            itemNum = itemDis.shape[0]
-            S_u_omiga = np.array([usrNet[ObjectNum, ulist] for _ in range(itemNum)])
-            S_i_omiga = itemNet[:, ilist]
-            SocialNetWork = S_i_omiga * S_u_omiga
-
-            d_u_omiga = np.array([usrDis[ObjectNum, ulist] for _ in range(itemNum)])
-            d_i_omiga = itemDis[:, ilist]
-
-            disSquare = d_i_omiga * d_u_omiga
-
-            kernel = kernelOperator(disSquare)
-
-            y = kernel * SocialNetWork.dot(rlist)
-            return (y)
-
-        elif mode == "item":
-            pass
+def DealingDescreteMissingValue(ObjectNoattr ,fileplace ,prefix ):
+    with  h5sparse.File(fileplace + prefix + "dot_cosine.h5") as h5f:
+        h5f = h5sparse.File(fileplace + prefix + "dot_cosine.h5")
 
 
 

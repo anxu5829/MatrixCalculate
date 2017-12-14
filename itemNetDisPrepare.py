@@ -15,7 +15,9 @@ from usefulTool import splitDF
 from usefulTool import tagCombine
 from usefulTool import findNetwork
 from usefulTool import largeMatrixDis
+from usefulTool import DealingDescreteMissingValue
 from sltools    import save_pickle
+
 
 
 
@@ -32,10 +34,16 @@ def extractItemInfo():
     },iterator= True)
 
     # use for debug
-    chunksize = 100000 #100000
+    chunksize = 2000 #100000
     item = item.get_chunk(chunksize)
     item.loc[chunksize+1, 'song_id'] = 'specialll'
     item.loc[chunksize+2, 'song_id'] = 'special22'
+
+
+    # change primary key to ID
+    item, item_id_dict = changeNameToID(item, 'song_id', plan="A")
+
+
 
     # fill na use default value , this value is also used in build social network
     # be caution ! you just need to fill those cols will be used in
@@ -51,11 +59,8 @@ def extractItemInfo():
 
     # fill na with special value calculated from data
 
-    fillCntnueNAN(item, ['song_length'])
+    itemHasntCntnue = fillCntnueNAN(item, ['song_length'],'song_id')
     scaleCntnueVariable(item,['song_length'])
-
-    # change primary key to ID
-    item, item_id_dict = changeNameToID(item, 'song_id', plan="A")
 
 
 
@@ -86,28 +91,31 @@ def extractItemInfo():
 
     (itemTagmatrix, itemNoAttr) = findNetwork(itemWithTag, fillnawith, split=r"&|\|")
 
-    # for those item which has no tag,let them has relationship with all the others
-    # the method is to let itemTagmatrix has -1 on the elements of that row so that
-    # the cosine value may be minus then  you can identify it and turn it to 1
 
-
-    for row in itemNoAttr:
-        itemTagmatrix[row, :] = -1
 
     # if you want to do it using loop , you may set num > 2
     # if you set num = 2 ,it will do it once
     # save the social network here
-    fileplace = "D:\\"
-    LargeSparseMatrixCosine(itemTagmatrix, itemNoAttr,num=100, fileplace=fileplace,prefix="item")
+    fileplace = "C:\\Users\\22560\\Desktop\\recommand Sys\\recommand Sys\\"
+    LargeSparseMatrixCosine(itemTagmatrix,itemNoAttr,num=3, fileplace=fileplace,prefix="item")
 
 
     # prepare largeDisMatrix
     itemCntnueAttr.set_index("song_id", inplace=True)
 
-    largeMatrixDis(itemCntnueAttr.values, num=200,
+
+
+    largeMatrixDis(itemCntnueAttr.values,itemHasntCntnue, num=2,
                    netFilePlace=fileplace,prefix="item")
+
+    # set those itemHasntCntnue to have zero dis with other
+
+
 
     save_pickle(item_id_dict, fileplace+"item_id_dict")
 
     #return(item_id_dict)
 
+
+if __name__ == "__main__":
+    extractItemInfo()

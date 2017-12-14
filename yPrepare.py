@@ -14,6 +14,8 @@ import h5py
 
 
 
+
+
 def kernel(x):
     h = 0.5
     return np.exp(- np.sqrt(x)/h )
@@ -290,6 +292,8 @@ def main():
 
 
     user_id_dict = load_pickle(filePlace+"user_id_dict")
+
+
     item_id_dict = load_pickle(filePlace+"item_id_dict")
 
     gc.collect()
@@ -327,9 +331,15 @@ def main():
 
 
 
+
+
+
+
+
+
 if __name__=="__main__":
-    #extractItemInfo()
-    #extractUserInfo()
+    extractItemInfo()
+    extractUserInfo()
 
 
     main()
