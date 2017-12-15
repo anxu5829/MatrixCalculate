@@ -10,7 +10,6 @@ import pickle
 
 
 
-
 def sparseToPandas(sparseMatrix):
     coo = sparseMatrix.tocoo(copy = False)
     data = pd.DataFrame(
@@ -18,9 +17,10 @@ def sparseToPandas(sparseMatrix):
          'col': coo.col,
          'data': coo.data}
         )[['row', 'col', 'data']].\
-        sort_values(['row', 'col']).\
         reset_index(drop=True)
+    # sort_values(['row', 'col']).\
     return(data)
+
 
 
 def pandasToSparse(pandasMatrix):

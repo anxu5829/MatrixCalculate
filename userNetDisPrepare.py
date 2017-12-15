@@ -76,7 +76,7 @@ def extractUserInfo():
     user.cntinue = user.cntinue.dt.days
     # other info can derived from user.continue.dt.components
 
-    fillCntnueNAN(user,['cntinue'])
+    userHasntCntnue = fillCntnueNAN(user,['cntinue'])
     scaleCntnueVariable(user,['cntinue'])
 
 
@@ -100,10 +100,9 @@ def extractUserInfo():
 
     (userTagmatrix, userNoAttr) = findNetwork(userWithTag, fillnawith, split=r"&|\|")
 
-    for row in userNoAttr:
-        userTagmatrix[row, :] = -1
 
-    fileplace = "D:\\"
+
+    fileplace = "C:\\Users\\22560\\Desktop\\recommand Sys\\recommand Sys\\"
     LargeSparseMatrixCosine(userTagmatrix,userNoAttr, num=20, fileplace=fileplace,prefix="user")
 
    # prepare largeDisMatrix

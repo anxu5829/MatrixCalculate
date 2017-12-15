@@ -114,6 +114,47 @@ def tagCombine(tableName, tagColList, id, split="|"):
 
 
 
+def relationToNetwork(objectRelationship,numOfUser,ifHasitsOwn,ifBIGDATA,prefix , fileplace):
+    # objectRelationship = userRelationship
+    #relation is sth like:
+    # userID  friendID value
+    #  1890    1625      1
+    #  1890    1807      1
+    #  1890    1816      1
+    #  1891     548      1
+    #  1891     564      1
+    if ifBIGDATA == False:
+        columns = objectRelationship.columns.tolist()
+        objectNetwork = csr_matrix((objectRelationship.loc[:,columns[2]],
+                                    (
+                                        objectRelationship.loc[:,columns[0]],
+                                        objectRelationship.loc[:,columns[1]]
+                                    )
+                                    ) ,shape = (numOfUser,numOfUser))
+        with h5py.File(fileplace+prefix+'dot_cosine.h5') as h5f :
+            for key in h5f.keys():
+                del h5f[key]
+        with h5sparse.File(fileplace+prefix+'dot_cosine.h5') as h5f:
+
+            if ifHasitsOwn:
+                h5f.create_dataset(
+                    "dot_cosineData/data", data=objectNetwork,
+                    chunks=(10000,), maxshape=(None,)
+                )
+            else :
+                objectNetwork = objectNetwork + diags(np.ones(numOfUser))
+                h5f.create_dataset(
+                    "dot_cosineData/data", data=objectNetwork,
+                    chunks=(10000,), maxshape=(None,)
+                )
+
+    else:
+        # 要求数据的row 一定是按照顺序排好的
+        pass
+
+
+
+
 def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
 
     #tableName = songtag;split = "|" ,
@@ -187,10 +228,12 @@ def findNetwork(tableName,fillnawith,split = r"&|\|",plan = 'A' ):
     return(ObjectTagmatrix,objectHasNoTag.values)
 
 
+
+
 def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
                             num = 5000,select = 0.7,
                             fileplace = "D:\\tempdata\\",
-                            prefix = "item"
+                            prefix = "item",plan = 'A'
                             ):
     # 如果对应对象没有分类，那么会把它和任何人的关系设为1
     # this method will save the result in disk
@@ -219,7 +262,24 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
             dot_cosine = lenOfBlockVec @ dot_product_of_block @ lenOfVecAll
 
             #　we just select few of them to build net work
-            dot_cosine = dot_cosine > select
+            if select <=1 :
+                # then just select the relationship with doc_cosine > select
+                dot_cosine = dot_cosine > select
+            else:
+                if plan == 'A':
+                    # if select = 100
+                    # then select the first 100 friends of each user
+                    #dot_cosine_data = sparseToPandas(dot_cosine)
+                    dot_cosineSort = dot_cosine.todense()
+                    dot_cosineSort.sort()
+                    dot_cosineSort = dot_cosineSort[:,-select]
+                    dot_cosine = dot_cosine > dot_cosineSort
+                else:
+                    dot_cosineDF = sparseToPandas(dot_cosine)
+                    dot_cosineDF = dot_cosineDF.groupby('row').apply(lambda df:df.nlargest(select,'data'))
+                    dot_cosine = pandasToSparse(dot_cosineDF)
+
+
 
             HasObjectWithNoAttr =np.array(list( set(ObjectNoAttr) & set(list(range(value, sep[index + 1])))))
 
@@ -258,6 +318,7 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
 
 
 
+
 def largeMatrixDis(largeDisMatrix,ObjectHasntCntnue,num = 2,
                    netFilePlace =  "C:\\Users\\22560\\Desktop\\",
                    prefix = "item"):
@@ -288,10 +349,10 @@ def largeMatrixDis(largeDisMatrix,ObjectHasntCntnue,num = 2,
 
                 dis = dis.multiply(sparse)
 
-                HasObjectWithNoCntnue = np.array(list(set(ObjectHasntCntnue) & set(list(range(i, sep[j+ 1])))))
+                HasObjectWithNoCntnue = np.array(list(set(ObjectHasntCntnue) & set(list(range(j, sep[i+ 1])))))
 
                 if (len(HasObjectWithNoCntnue) != 0):
-                    dis[HasObjectWithNoCntnue - i, :] = 0
+                    dis[HasObjectWithNoCntnue - j, :] = 0
 
                 if i == 0:
                     # if its the first loop
