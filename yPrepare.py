@@ -188,9 +188,9 @@ def yPrepareForSmallData(user_num,user_id_dict,item_id_dict,filePlace,item_id,us
             usrRelationshipUsed = user_net['dot_cosineData/data'][userNowDealing:(userNowDealing+1)].\
                                             toarray().ravel()
 
-
+            usrRelationshipUsed = usrRelationshipUsed.astype(np.int32)
             # get data which has relationship with userNowDealing
-            usrHasRelation = usrList[usrRelationshipUsed]
+            usrHasRelation = usrList[usrRelationshipUsed>0]
             trainHasRelation = train[train[user_id].\
                 isin(usrHasRelation)].sort_values(by = [item_id])
 

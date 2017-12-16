@@ -273,7 +273,9 @@ def LargeSparseMatrixCosine(largeSparseMatrix,ObjectNoAttr,
                     dot_cosineSort = dot_cosine.todense()
                     dot_cosineSort.sort()
                     dot_cosineSort = dot_cosineSort[:,-select]
+                    # return a sparse
                     dot_cosine = dot_cosine > dot_cosineSort
+                    dot_cosine = csr_matrix(dot_cosine)
                 else:
                     dot_cosineDF = sparseToPandas(dot_cosine)
                     dot_cosineDF = dot_cosineDF.groupby('row').apply(lambda df:df.nlargest(select,'data'))
@@ -339,9 +341,8 @@ def largeMatrixDis(largeDisMatrix,ObjectHasntCntnue,num = 2,
                 negtive2xTy = -2*blockData.dot(largeDisMatrix.transpose())
                 xTx   = yTy[blockSlice]
                 xTx   = xTx.reshape((len(xTx),1))
-
-
                 dis = yTy+ negtive2xTy + xTx
+                dis[dis<0] = 0
                 dis = csr_matrix(dis)
 
                 sparse = h5f['dot_cosineData/data'][blockSlice]
